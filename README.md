@@ -1,5 +1,6 @@
-# projeto-so-2022-23
+# OS_Project
 
-Código fornecido para o projeto de Sistemas Operativos do ano letivo 2022-2023.
+This Operating Systems project is in development by me and @SobriKen.
+Co-op fun and suffering.
 
-Consultar o [enunciado do projeto](https://github.com/tecnico-so/enunciado-proj-so-2022-23).
+* WORK IN PROGRESS *
