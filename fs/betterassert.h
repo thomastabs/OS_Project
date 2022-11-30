@@ -1,6 +1,6 @@
 #ifndef _BETTER_ASSERT_H
 #define _BETTER_ASSERT_H
-
+//gay
 #include <stdbool.h>
 #include <stdio.h>
 
