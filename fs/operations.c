@@ -242,10 +242,54 @@ int tfs_unlink(char const *target) {
 }
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
-    (void)source_path;
-    (void)dest_path;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
+    int source_handle = tfs_open(source_path, 0);
+    if (source_handle == -1) {
+        return -1;
+    }
 
-    PANIC("TODO: tfs_copy_from_external_fs");
+    open_file_entry_t *source_file = get_open_file_entry(source_handle);
+    if (source_file == NULL) {
+        return -1;
+    }
+
+    int source_inum = source_file->of_inumber;
+    inode_t *source_inode = inode_get(source_inum);
+    if (source_inode == NULL) {
+        return -1;
+    }
+
+    FILE *dest_file = fopen(dest_path, "w");
+    if (dest_file == NULL) {
+        return -1;
+    }
+
+    ssize_t bytes_read;
+    void *buffer;
+    buffer = malloc(tfs_default_params().block_size);
+    if (buffer == NULL) {
+        return -1;
+    }
+
+    do {
+        memset(buffer, 0, tfs_default_params().block_size);
+        bytes_read = tfs_read(source_handle, buffer, tfs_default_params().block_size);
+        if (bytes_read == -1) {
+            free(buffer);
+            return -1;
+        }
+        size_t bytes_to_be_written = (size_t) bytes_read;
+        size_t bytes_written = fwrite(buffer, 1, bytes_to_be_written, dest_file);
+        if (bytes_written != bytes_to_be_written) {
+            free(buffer);
+            return -1;
+        }
+    } while (bytes_read == tfs_default_params().block_size); // stops when it reads less than BLOCK_SIZE bytes
+
+    free(buffer);
+
+    if (tfs_close(source_handle) == -1) {
+        return -1;
+    }
+    fclose(dest_file);
+    return 0;
 }
