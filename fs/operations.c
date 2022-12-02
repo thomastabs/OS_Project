@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
 
 #include "betterassert.h"
 
@@ -242,28 +243,17 @@ int tfs_unlink(char const *target) {
 }
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
-    int source_handle = tfs_open(source_path, 0);
-    if (source_handle == -1) {
-        return -1;
-    }
-
-    open_file_entry_t *source_file = get_open_file_entry(source_handle);
+    FILE* source_file = fopen(source_path, "r");
     if (source_file == NULL) {
         return -1;
     }
 
-    int source_inum = source_file->of_inumber;
-    inode_t *source_inode = inode_get(source_inum);
-    if (source_inode == NULL) {
+    int dest_file = tfs_open(dest_path, TFS_O_CREAT | TFS_O_TRUNC);
+    if (dest_file == -1) {
         return -1;
     }
 
-    FILE *dest_file = fopen(dest_path, "w");
-    if (dest_file == NULL) {
-        return -1;
-    }
-
-    ssize_t bytes_read;
+    size_t bytes_read;
     void *buffer;
     buffer = malloc(tfs_default_params().block_size);
     if (buffer == NULL) {
@@ -272,13 +262,13 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
 
     do {
         memset(buffer, 0, tfs_default_params().block_size);
-        bytes_read = tfs_read(source_handle, buffer, tfs_default_params().block_size);
+        bytes_read = fread(buffer, 1, tfs_default_params().block_size, source_file);
         if (bytes_read == -1) {
             free(buffer);
             return -1;
         }
-        size_t bytes_to_be_written = (size_t) bytes_read;
-        size_t bytes_written = fwrite(buffer, 1, bytes_to_be_written, dest_file);
+        size_t bytes_to_be_written = bytes_read;
+        ssize_t bytes_written = tfs_write(dest_file, buffer, bytes_read);
         if (bytes_written != bytes_to_be_written) {
             free(buffer);
             return -1;
@@ -287,9 +277,10 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
 
     free(buffer);
 
-    if (tfs_close(source_handle) == -1) {
+    fclose(source_file);
+    if (tfs_close(dest_file) == -1) {
         return -1;
     }
-    fclose(dest_file);
-    return 0;
+    return 0; 
+
 }
