@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
 
 #include "betterassert.h"
 
@@ -248,8 +247,19 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
         return -1;
     }
 
-    int dest_file = tfs_open(dest_path, TFS_O_CREAT | TFS_O_TRUNC);
-    if (dest_file == -1) {
+    int dest_handle = tfs_open(dest_path, TFS_O_CREAT | TFS_O_TRUNC);
+    if (dest_handle == -1) {
+        return -1;
+    }
+
+    open_file_entry_t *dest_file = get_open_file_entry(dest_handle);
+    if (dest_file == NULL) {
+        return -1;
+    }
+
+    int dest_inum = dest_file->of_inumber;
+    inode_t *dest_inode = inode_get(dest_inum);
+    if (dest_inode == NULL) {
         return -1;
     }
 
@@ -268,7 +278,7 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
             return -1;
         }
         size_t bytes_to_be_written = bytes_read;
-        ssize_t bytes_written = tfs_write(dest_file, buffer, bytes_read);
+        ssize_t bytes_written = tfs_write(dest_handle, buffer, bytes_read);
         if (bytes_written != bytes_to_be_written) {
             free(buffer);
             return -1;
@@ -278,7 +288,7 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     free(buffer);
 
     fclose(source_file);
-    if (tfs_close(dest_file) == -1) {
+    if (tfs_close(dest_handle) == -1) {
         return -1;
     }
     return 0; 
