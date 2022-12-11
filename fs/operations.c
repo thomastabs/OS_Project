@@ -133,55 +133,43 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 }
 
 int tfs_sym_link(char const *target, char const *link_name) {
-    (void)target;
-    (void)link_name;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
+    inode_t *root = inode_get(ROOT_DIR_INUM); // 0 -root inumber
+    if (root == NULL){
+        return -1;
+    }
 
-    PANIC("TODO: tfs_sym_link");
+    int target_inumber = tfs_lookup(target, root);
+    if(target_inumber == -1){
+        return -1;
+    }
+
+    int link = add_dir_entry(root,link_name + 1,target_inumber);
+    if (link == -1){
+        return -1;
+    }
+
+    return 0;
 }
 
 int tfs_link(char const *target, char const *link_name) {
-    int target_handle = tfs_open(target, 0);
-    if (target_handle == -1) {
+    inode_t *root = inode_get(ROOT_DIR_INUM); // 0 -root inumber
+    if (root == NULL){
         return -1;
     }
 
-    int link_handle = tfs_open(link_name, TFS_O_CREAT);
-    if (link_handle == -1) {
+    int target_inumber = tfs_lookup(target, root);
+    if (target_inumber == -1){
         return -1;
     }
 
-    int b = data_block_alloc();
-    dir_entry_t *target_file = (dir_entry_t *)data_block_get(b);
-    if (target_file == NULL) {
+    inode_t *target_inode = inode_get(target_inumber);
+    if (target_inode == NULL){
         return -1;
     }
 
-    int target_inum = target_file->d_inumber;
-    inode_t *target_inode = inode_get(target_inum);
-    if (target_inode == NULL) {
-        return -1;
-    }
-
-    inode_t *root = inode_get(0); // 0 -root inumber
-    int link_in = find_in_dir(root, link_name);
-    if (link_in != -1){
-        return -1;
-    }
-
-    int link = add_dir_entry(root,link_name,target_inum);
-    if (link == -1) {
-        return -1;
-    }
     target_inode->i_hardlink_counter++;
-
-
-    if (tfs_close(target_handle) == -1){
-        return -1;
-    }
-
-    if (tfs_close(link_handle) == -1){
+    int link = add_dir_entry(root,link_name + 1,target_inumber);
+    if (link == -1){
         return -1;
     }
 
@@ -264,7 +252,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 
         // Perform the actual read
         memcpy(buffer, block + file->of_offset, to_read);
-        // The offset associated with the file handle is incremented accordingly
+        // The offs´et associated with the file handle is incremented accordingly
         file->of_offset += to_read;
     }
 
