@@ -173,12 +173,46 @@ int tfs_sym_link(char const *target, char const *link_name) {
         return -1;
     }
 
-    if (verifica_existencia(target) == 0) {
-       //por fazer com tfs open 
-    } 
-    else  
+    int target_inumber = tfs_lookup(target, root);
+    if (target_inumber == -1)
+        return -1; 
+
+    int link = add_dir_entry(root, link_name + 1, target_inumber);
+    if (link == -1)
         return -1;
+    
+    return 0;
 }
+    /**
+    int dest_handle = tfs_open(link_name, TFS_O_CREAT | TFS_O_TRUNC);
+    if (dest_handle == -1) {
+        return -1;
+    }
+
+    open_file_entry_t *dest_file = get_open_file_entry(dest_handle);
+    if (dest_file == NULL) {
+        return -1;
+    }
+
+    int dest_inum = dest_file->of_inumber;
+    inode_t *dest_inode = inode_get(dest_inum);
+    if (dest_inode == NULL) {
+        return -1;
+    }
+
+    void *buffer;
+    buffer = malloc(tfs_default_params().block_size);
+    if (buffer == NULL) {
+        return -1;
+    }
+    
+    ssize_t bytes = tfs_write(dest_handle, buffer, strlen(link_name));
+    if (bytes <= 0){
+        return -1;
+    }
+    tfs_close(dest_handle);
+    return 0;
+    **/
 
 
 int tfs_link(char const *target_file, char const *link_path){
@@ -187,20 +221,19 @@ int tfs_link(char const *target_file, char const *link_path){
         return -1;
     }
 
-    if (verifica_existencia(target_file) == 0){
-        int target_inumber = tfs_lookup(target_file, root);
-        inode_t *target_inode = inode_get(target_inumber);
-
-        int link = add_dir_entry(root, link_path + 1, target_inumber);
-        if (link == -1){ 
-            return -1; 
-        }
-        target_inode->i_hardlink_counter++;
-        return 0;
-
-    } 
-    else  
+    int target_inumber = tfs_lookup(target_file, root);
+    if (target_inumber == -1)
         return -1;
+    
+    inode_t *target_inode = inode_get(target_inumber);
+    
+    int link = add_dir_entry(root, link_path + 1, target_inumber);
+    if (link == -1)
+        return -1; 
+    
+    target_inode->i_hardlink_counter++;
+    return 0;
+
 }
 
 int tfs_close(int fhandle) {
