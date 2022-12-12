@@ -321,9 +321,6 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 
 
 int tfs_unlink(char const *target) {
-    (void) target;
-
-    /**
     inode_t *root = inode_get(ROOT_DIR_INUM); // 0 -root inumber
     if (root == NULL){
         return -1;
@@ -334,34 +331,33 @@ int tfs_unlink(char const *target) {
         return -1;
     }
 
-    if (target == "hard_link"){
-        inode_t *target_inode = inode_get(target_inumber);
-        if (target_inode == NULL)
-            return -1;
+    inode_t *target_inode = inode_get(target_inumber);
+    if (target_inode == NULL)
+        return -1;
 
-        if (target_inode->i_hardlink_counter <= 0){
-            clear_dir_entry(target_inode, target + 1);
-            return 0;
-        }
-        else {
-            target_inode->i_hardlink_counter--;
-            //?? desfaz o link
-            return 0;
-        }
-    }
-    else if (target == "soft_link"){
-        inode_t *target_inode = inode_get(target_inumber);
-        if (target_inode == NULL)
-            return -1;
-        
+    if (target_inode->i_hardlink_counter == 1){
+        // quando um inode é criado o hard_link counter é 1, logo nao tem hard links
+        // e agr vai verificar se tem soft links, how?
+      
+        //??
         clear_dir_entry(target_inode, target + 1);
-        //desfaz o link?
         return 0;
     }
-    else
-        return -1;
-**/
-    return 0;
+    else {
+        //com target_inode->i_hardlink_counter > 1, ent temos hard links para apagar
+        while (target_inode->i_hardlink_counter != 1){
+            target_inode->i_hardlink_counter--;
+            // preciso do sub file name ou seja do link_name q nao tenho
+            // uma ideia seria fzr uma lista na inode structure com 
+            // os nomes dos hard links ja feitos
+            // supostamente assim seria possivel apagar todos
+            if (clear_dir_entry(root, target + 1) == -1){
+                return -1;
+            }  
+        }
+        //aqui supostamente todos os hard links estao apagados 
+        return 0;
+    }
 }
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
