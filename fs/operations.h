@@ -55,6 +55,9 @@ typedef enum {
  */
 int tfs_open(char const *name, tfs_file_mode_t mode);
 
+int verifica_existencia(char const *target);
+int verifica_existencia2(char const *target_file, char const *source_file);
+
 /**
  * Create a symbolic link to a file.
  *
@@ -76,6 +79,8 @@ int tfs_sym_link(char const *target, char const *link_name);
  * Returns 0 if successful, -1 otherwise.
  */
 int tfs_link(char const *target_file, char const *link_name);
+
+int tfs_link2(char const *target, char const *link_name);
 
 /**
  * Close a file.

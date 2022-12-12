@@ -73,6 +73,41 @@ static int tfs_lookup(char const *name, inode_t const *root_inode) {
     return find_in_dir(root_inode, name);
 }
 
+//funcao auxiliar - assim escusase da se usar sempre o tfs lookup, verifica ambos source e target
+int verifica_existencia2(char const *target_file, char const *source_file){
+    inode_t *root = inode_get(ROOT_DIR_INUM); // 0 -root inumber
+    if (root == NULL){
+        return -1;
+    }
+    
+    int target_inumber = tfs_lookup(target_file, root);
+    if(target_inumber == -1){
+        return -1;
+    }
+
+    int source_inumber = tfs_lookup(source_file, root);
+    if(source_inumber == -1){
+        return -1;
+    }
+
+    return 0;
+}
+
+//a mesma funcao para apenas 1 argumento
+int verifica_existencia(char const *target){
+    inode_t *root = inode_get(ROOT_DIR_INUM); // 0 -root inumber
+    if (root == NULL){
+        return -1;
+    }
+    
+    int target_inumber = tfs_lookup(target, root);
+    if(target_inumber == -1){
+        return -1;
+    }
+
+    return 0;
+}
+
 int tfs_open(char const *name, tfs_file_mode_t mode) {
     // Checks if the path name is valid
     if (!valid_pathname(name)) {
@@ -138,42 +173,34 @@ int tfs_sym_link(char const *target, char const *link_name) {
         return -1;
     }
 
-    int target_inumber = tfs_lookup(target, root);
-    if(target_inumber == -1){
+    if (verifica_existencia(target) == 0) {
+       //por fazer com tfs open 
+    } 
+    else  
         return -1;
-    }
-
-    int link = add_dir_entry(root,link_name + 1,target_inumber);
-    if (link == -1){
-        return -1;
-    }
-
-    return 0;
 }
 
-int tfs_link(char const *target, char const *link_name) {
-    inode_t *root = inode_get(ROOT_DIR_INUM); // 0 -root inumber
+
+int tfs_link(char const *target_file, char const *link_path){
+    inode_t *root = inode_get(ROOT_DIR_INUM); // 0 - root inumber
     if (root == NULL){
         return -1;
     }
 
-    int target_inumber = tfs_lookup(target, root);
-    if (target_inumber == -1){
-        return -1;
-    }
+    if (verifica_existencia(target_file) == 0){
+        int target_inumber = tfs_lookup(target_file, root);
+        inode_t *target_inode = inode_get(target_inumber);
 
-    inode_t *target_inode = inode_get(target_inumber);
-    if (target_inode == NULL){
-        return -1;
-    }
+        int link = add_dir_entry(root, link_path + 1, target_inumber);
+        if (link == -1){ 
+            return -1; 
+        }
+        target_inode->i_hardlink_counter++;
+        return 0;
 
-    target_inode->i_hardlink_counter++;
-    int link = add_dir_entry(root,link_name + 1,target_inumber);
-    if (link == -1){
+    } 
+    else  
         return -1;
-    }
-
-    return 0;
 }
 
 int tfs_close(int fhandle) {
@@ -259,12 +286,49 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
     return (ssize_t)to_read;
 }
 
-int tfs_unlink(char const *target) {
-    (void)target;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
 
-    PANIC("TODO: tfs_unlink");
+int tfs_unlink(char const *target) {
+    (void) target;
+
+    /**
+    inode_t *root = inode_get(ROOT_DIR_INUM); // 0 -root inumber
+    if (root == NULL){
+        return -1;
+    }
+
+    int target_inumber = tfs_lookup(target, root);
+    if (target_inumber == -1){
+        return -1;
+    }
+
+    if (target == "hard_link"){
+        inode_t *target_inode = inode_get(target_inumber);
+        if (target_inode == NULL)
+            return -1;
+
+        if (target_inode->i_hardlink_counter <= 0){
+            clear_dir_entry(target_inode, target + 1);
+            return 0;
+        }
+        else {
+            target_inode->i_hardlink_counter--;
+            //?? desfaz o link
+            return 0;
+        }
+    }
+    else if (target == "soft_link"){
+        inode_t *target_inode = inode_get(target_inumber);
+        if (target_inode == NULL)
+            return -1;
+        
+        clear_dir_entry(target_inode, target + 1);
+        //desfaz o link?
+        return 0;
+    }
+    else
+        return -1;
+**/
+    return 0;
 }
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
