@@ -67,7 +67,7 @@ static int tfs_lookup(char const *name) {
     if (!valid_pathname(name)) {
         return -1;
     }
-
+    //aaaaaaa;
     // skip the initial '/' character
     name++;
 
