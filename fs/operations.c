@@ -61,7 +61,8 @@ static bool valid_pathname(char const *name) {
  *   - root_inode: the root directory inode
  * Returns the inumber of the file, -1 if unsuccessful.
  */
-static int tfs_lookup(char const *name, inode_t const *root_inode) {
+static int tfs_lookup(char const *name) {
+    inode_t *root_inode = inode_get(ROOT_DIR_INUM);
     // TODO: assert that root_inode is the root directory
     if (!valid_pathname(name)) {
         return -1;
@@ -82,7 +83,7 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
     ALWAYS_ASSERT(root_dir_inode != NULL,
                   "tfs_open: root dir inode must exist");
-    int inum = tfs_lookup(name, root_dir_inode);
+    int inum = tfs_lookup(name);
     size_t offset;
 
     if (inum >= 0) {
@@ -138,7 +139,7 @@ int tfs_sym_link(char const *target, char const *link_name) {
         return -1;
     }
 
-    int target_inumber = tfs_lookup(target, root);
+    int target_inumber = tfs_lookup(target);
     if (target_inumber == -1)
         return -1; 
 
@@ -186,7 +187,7 @@ int tfs_link(char const *target_file, char const *link_path){
         return -1;
     }
 
-    int target_inumber = tfs_lookup(target_file, root);
+    int target_inumber = tfs_lookup(target_file);
     if (target_inumber == -1)
         return -1;
     
@@ -291,7 +292,7 @@ int tfs_unlink(char const *target) {
         return -1;
     }
 
-    int target_inumber = tfs_lookup(target, root);
+    int target_inumber = tfs_lookup(target);
     if (target_inumber == -1){
         return -1;
     }
