@@ -73,41 +73,6 @@ static int tfs_lookup(char const *name, inode_t const *root_inode) {
     return find_in_dir(root_inode, name);
 }
 
-//funcao auxiliar - assim escusase da se usar sempre o tfs lookup, verifica ambos source e target
-int verifica_existencia2(char const *target_file, char const *source_file){
-    inode_t *root = inode_get(ROOT_DIR_INUM); // 0 -root inumber
-    if (root == NULL){
-        return -1;
-    }
-    
-    int target_inumber = tfs_lookup(target_file, root);
-    if(target_inumber == -1){
-        return -1;
-    }
-
-    int source_inumber = tfs_lookup(source_file, root);
-    if(source_inumber == -1){
-        return -1;
-    }
-
-    return 0;
-}
-
-//a mesma funcao para apenas 1 argumento
-int verifica_existencia(char const *target){
-    inode_t *root = inode_get(ROOT_DIR_INUM); // 0 -root inumber
-    if (root == NULL){
-        return -1;
-    }
-    
-    int target_inumber = tfs_lookup(target, root);
-    if(target_inumber == -1){
-        return -1;
-    }
-
-    return 0;
-}
-
 int tfs_open(char const *name, tfs_file_mode_t mode) {
     // Checks if the path name is valid
     if (!valid_pathname(name)) {
