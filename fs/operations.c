@@ -287,7 +287,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 
 
 int tfs_unlink(char const *target) {
-    inode_t *root = inode_get(ROOT_DIR_INUM); // 0 -root inumber
+    inode_t *root = inode_get(ROOT_DIR_INUM); // 0 - root inumber
     if (root == NULL){
         return -1;
     }
