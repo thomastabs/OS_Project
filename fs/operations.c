@@ -176,6 +176,7 @@ int tfs_sym_link(char const *target, char const *link_name) {
         return -1;
     }
     tfs_close(dest_handle);
+    free(buffer);
     return 0;
     **/
 
@@ -300,30 +301,17 @@ int tfs_unlink(char const *target) {
     if (target_inode == NULL)
         return -1;
 
-    if (target_inode->i_hardlink_counter == 1){
-        // quando um inode é criado o hard_link counter é 1, logo nao tem hard links
-        // e agr vai verificar se tem soft links, how?
-      
-        //??
+    // apagar o unico hard link q tem com o proprio inode
+    target_inode->i_hardlink_counter--; 
+    if (target_inode->i_hardlink_counter == 0){
         clear_dir_entry(target_inode, target + 1);
+        data_block_free(target_inode->i_data_block);
+        inode_delete(target_inumber);
         return 0;
-    }
-    else {
-        //com target_inode->i_hardlink_counter > 1, ent temos hard links para apagar
-        while (target_inode->i_hardlink_counter != 1){
-            target_inode->i_hardlink_counter--;
-            // preciso do sub file name ou seja do link_name q nao tenho
-            // uma ideia seria fzr uma lista na inode structure com 
-            // os nomes dos hard links ja feitos
-            // supostamente assim seria possivel apagar todos
-            if (clear_dir_entry(root, target + 1) == -1){
-                return -1;
-            }  
-        }
-        //aqui supostamente todos os hard links estao apagados 
-        return 0;
-    }
-}
+    }     
+    clear_dir_entry(target_inode, target + 1);
+    return 0;  
+}   
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     FILE* source_file = fopen(source_path, "r");
