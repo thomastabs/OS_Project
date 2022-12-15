@@ -77,8 +77,6 @@ int tfs_sym_link(char const *target, char const *link_name);
  */
 int tfs_link(char const *target_file, char const *link_name);
 
-int tfs_link2(char const *target, char const *link_name);
-
 /**
  * Close a file.
  *

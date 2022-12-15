@@ -63,7 +63,7 @@ static bool valid_pathname(char const *name) {
  */
 static int tfs_lookup(char const *name) {
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
-    // TODO: assert that root_inode is the root directory
+    
     if (!valid_pathname(name)) {
         return -1;
     }
@@ -91,6 +91,20 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         ALWAYS_ASSERT(inode != NULL,
                       "tfs_open: directory files must have an inode");
 
+        // if the target is a SymLink type of file, 
+        // then instead of opening of the symlink file
+        // itself, the symlink target path is the one 
+        // opened by overwriting the values already made 
+        if (inode->i_node_type == T_SYMLINK){
+            inum = tfs_lookup(inode->i_symlink_target);
+            if (inum == -1)
+                return -1;
+            
+            inode = inode_get(inum);
+            if (inode == NULL)
+                return -1;
+        }
+
         // Truncate (if requested)
         if (mode & TFS_O_TRUNC) {
             if (inode->i_size > 0) {
@@ -101,6 +115,12 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         // Determine initial offset
         if (mode & TFS_O_APPEND) {
             offset = inode->i_size;
+
+            if ((inode->i_node_type == T_SYMLINK) && 
+                (tfs_lookup(inode->i_symlink_target) == -1)){
+                return -1;
+            }
+
         } else {
             offset = 0;
         }
@@ -110,6 +130,13 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         inum = inode_create(T_FILE);
         if (inum == -1) {
             return -1; // no space in inode table
+        }
+
+        inode_t *name_inode = inode_get(inum);
+        if ((name_inode->i_node_type == T_SYMLINK) && 
+        (tfs_lookup(name_inode->i_symlink_target) == -1) &&
+            (mode != TFS_O_CREAT)){
+            return -1;
         }
 
         // Add entry in the root directory
@@ -133,52 +160,26 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 }
 
 int tfs_sym_link(char const *target, char const *link_name) {
-    inode_t *root = inode_get(ROOT_DIR_INUM); // 0 -root inumber
-    if (root == NULL){
+    inode_t *root = inode_get(ROOT_DIR_INUM); // 0 - root inumber
+    int target_inumber = tfs_lookup(target); // ve se o target existe
+    
+    if (root == NULL || target_inumber == -1){
         return -1;
     }
 
-    int target_inumber = tfs_lookup(target);
-    if (target_inumber == -1)
-        return -1; 
+    int symlink_inumber = inode_create(T_SYMLINK);
+    if (symlink_inumber == -1)
+        return -1;
+    
+    inode_t *symlink_inode = inode_get(symlink_inumber);
+    strncpy(symlink_inode->i_symlink_target, target, MAX_FILE_NAME - 1);
 
-    int link = add_dir_entry(root, link_name + 1, target_inumber);
+    int link = add_dir_entry(root, link_name + 1, symlink_inumber);
     if (link == -1)
         return -1;
-    
+        
     return 0;
 }
-    /**
-    int dest_handle = tfs_open(link_name, TFS_O_CREAT | TFS_O_TRUNC);
-    if (dest_handle == -1) {
-        return -1;
-    }
-
-    open_file_entry_t *dest_file = get_open_file_entry(dest_handle);
-    if (dest_file == NULL) {
-        return -1;
-    }
-
-    int dest_inum = dest_file->of_inumber;
-    inode_t *dest_inode = inode_get(dest_inum);
-    if (dest_inode == NULL) {
-        return -1;
-    }
-
-    void *buffer;
-    buffer = malloc(tfs_default_params().block_size);
-    if (buffer == NULL) {
-        return -1;
-    }
-    
-    ssize_t bytes = tfs_write(dest_handle, buffer, strlen(link_name));
-    if (bytes <= 0){
-        return -1;
-    }
-    tfs_close(dest_handle);
-    free(buffer);
-    return 0;
-    **/
 
 
 int tfs_link(char const *target_file, char const *link_path){
@@ -192,6 +193,10 @@ int tfs_link(char const *target_file, char const *link_path){
         return -1;
     
     inode_t *target_inode = inode_get(target_inumber);
+    
+    if (target_inode->i_node_type & T_SYMLINK)
+        // bloqueia a tentativa de fzr hard link com um target Symbolic Link
+        return -1; 
     
     int link = add_dir_entry(root, link_path + 1, target_inumber);
     if (link == -1)
@@ -281,6 +286,9 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         // The offs´et associated with the file handle is incremented accordingly
         file->of_offset += to_read;
     }
+    if (to_read == 0) {
+        buffer = '\0';
+    }
 
     return (ssize_t)to_read;
 }
@@ -288,12 +296,8 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 
 int tfs_unlink(char const *target) {
     inode_t *root = inode_get(ROOT_DIR_INUM); // 0 - root inumber
-    if (root == NULL){
-        return -1;
-    }
-
-    int target_inumber = tfs_lookup(target);
-    if (target_inumber == -1){
+    int target_inumber = tfs_lookup(target); // ve se o target existe
+    if (root == NULL || target_inumber == -1){
         return -1;
     }
 
@@ -301,16 +305,25 @@ int tfs_unlink(char const *target) {
     if (target_inode == NULL)
         return -1;
 
-    // apagar o unico hard link q tem com o proprio inode
-    target_inode->i_hardlink_counter--; 
-    if (target_inode->i_hardlink_counter == 0){
-        clear_dir_entry(target_inode, target + 1);
-        data_block_free(target_inode->i_data_block);
-        inode_delete(target_inumber);
+    if (target_inode->i_hardlink_counter >= 1 && !(target_inode->i_node_type & T_SYMLINK)){
+        // aqui o target ou é um path de um hard link ou um fich normal
+        target_inode->i_hardlink_counter--; 
+        if (target_inode->i_hardlink_counter == 0){
+            // apagar o unico hard link q tem com o proprio inode
+            clear_dir_entry(root, target + 1);
+            inode_delete(target_inumber);
+            return 0;
+        }
+        clear_dir_entry(root, target + 1);
         return 0;
-    }     
-    clear_dir_entry(target_inode, target + 1);
-    return 0;  
+    } 
+    else if (target_inode->i_node_type & T_SYMLINK) {
+        clear_dir_entry(root, target + 1);
+        inode_delete(target_inumber);
+        return -1;
+    }
+    else
+        return -1;
 }   
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {

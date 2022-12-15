@@ -59,6 +59,10 @@ int main() {
 
     write_contents(link_path1);
     assert_contents_ok(target_path1);
+    // aparentemente os bytes read com o tfs read sao 0, e aparentemente
+    // o buffer é '\0' repetido 30 vezes, logo sizeof(buffer) é igual a 30
+    // entao no assert_contents_ok esta a ser comparado os bytes read
+    // pelo tfs_read q sao 0, pelo sizeof(buffer) que sao 30, o q n faz nenhum sentido
 
     // Write to original file and read through symlink
     {
