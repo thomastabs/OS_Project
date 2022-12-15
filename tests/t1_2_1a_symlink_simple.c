@@ -52,7 +52,7 @@ int main() {
         assert(tfs_close(f) != -1);
 
         assert_empty_file(target_path1); // sanity check
-    }
+    }   
 
     assert(tfs_sym_link(target_path1, link_path1) != -1);
     assert_empty_file(link_path1);

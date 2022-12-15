@@ -78,6 +78,19 @@ int tfs_sym_link(char const *target, char const *link_name);
 int tfs_link(char const *target_file, char const *link_name);
 
 /**
+ * Looks for a file.
+ *
+ * Note: as a simplification, only a plain directory space (root directory only)
+ * is supported.
+ *
+ * Input:
+ *   - name: absolute path name
+ *   - root_inode: the root directory inode
+ * Returns the inumber of the file, -1 if unsuccessful.
+ */
+int tfs_lookup(char const *name);
+
+/**
  * Close a file.
  *
  * Input:

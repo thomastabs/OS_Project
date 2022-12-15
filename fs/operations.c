@@ -61,7 +61,7 @@ static bool valid_pathname(char const *name) {
  *   - root_inode: the root directory inode
  * Returns the inumber of the file, -1 if unsuccessful.
  */
-static int tfs_lookup(char const *name) {
+int tfs_lookup(char const *name) {
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
     
     if (!valid_pathname(name)) {
