@@ -14,7 +14,8 @@ int main() {
         "A Fe, o Imperio, e as terras viciosas de Africa e de Asia andaram devastando, "
         "e aqueles que por obras valerosas se vao da lei da Morte libertando, "
         "cantando espalharei por toda parte, se a tanto me ajudar o engenho e arte.";
-    char *path_copied_file = "/f2";
+        
+    char *path_copied_file = "/f1";
     char *path_src = "tests/file_to_copy2.txt";
     char buffer[600];
 
