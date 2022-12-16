@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <string.h>
 
+ // Hard Link Test
+
 char const target_path1[] = "/f1";
 char const link_path1[] = "/l1";
 

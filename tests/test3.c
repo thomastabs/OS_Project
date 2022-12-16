@@ -5,10 +5,10 @@
 #include <stdio.h>
 #include <string.h>
 
+// Sym Link Test
+
 char const target_path1[] = "/f1";
 char const link_path1[] = "/l1";
- 
-// Sym Link Test
 
 int main(){
     assert(tfs_init(NULL) != -1);
