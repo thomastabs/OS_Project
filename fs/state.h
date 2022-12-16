@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <pthread.h>
 
 /**
  * Directory entry
@@ -43,6 +44,19 @@ typedef struct {
     size_t of_offset;
 } open_file_entry_t;
 
+pthread_rwlock_t *get_inode_table_lock(int inumber);
+pthread_rwlock_t *get_open_file_table_lock(int file_handle);
+
+void lock_mutex(pthread_mutex_t *mutex);
+void read_lock_rwlock(pthread_rwlock_t *rwlock);
+void write_lock_rwlock(pthread_rwlock_t *rwlock);
+void unlock_mutex(pthread_mutex_t *mutex);
+void unlock_rwlock(pthread_rwlock_t *rwlock);
+void init_mutex(pthread_mutex_t *mutex);
+void init_rwlock(pthread_rwlock_t *rwlock);
+void destroy_mutex(pthread_mutex_t *mutex);
+void destroy_rwlock(pthread_rwlock_t *rwlock);
+
 int state_init(tfs_params);
 int state_destroy(void);
 
@@ -63,5 +77,13 @@ void *data_block_get(int block_number);
 int add_to_open_file_table(int inumber, size_t offset);
 void remove_from_open_file_table(int fhandle);
 open_file_entry_t *get_open_file_entry(int fhandle);
+
+/* Stores the number of currently open files */
+extern int open_files_count;
+
+/* Condition variable and mutex */
+extern pthread_cond_t open_files_cond;
+extern pthread_mutex_t open_files_mutex;
+extern pthread_mutex_t open_file_lock;
 
 #endif // STATE_H

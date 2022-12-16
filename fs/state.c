@@ -17,16 +17,28 @@ static tfs_params fs_params;
 // Inode table
 static inode_t *inode_table;
 static allocation_state_t *freeinode_ts;
+static pthread_rwlock_t *inode_table_locks;
 
 // Data blocks
 static char *fs_data; // # blocks * block size
 static allocation_state_t *free_blocks;
+static pthread_rwlock_t *data_blocks_locks;
 
 /*
  * Volatile FS state
  */
 static open_file_entry_t *open_file_table;
 static allocation_state_t *free_open_file_entries;
+static pthread_rwlock_t *open_file_table_locks;
+
+/* Locks for directories */
+static pthread_rwlock_t *dir_entries_locks;
+
+
+int open_files_count = 0;
+pthread_cond_t open_files_cond;
+pthread_mutex_t open_files_mutex;
+pthread_mutex_t open_file_lock;
 
 // Convenience macros
 #define INODE_TABLE_SIZE (fs_params.max_inode_count)
@@ -34,6 +46,7 @@ static allocation_state_t *free_open_file_entries;
 #define MAX_OPEN_FILES (fs_params.max_open_files_count)
 #define BLOCK_SIZE (fs_params.block_size)
 #define MAX_DIR_ENTRIES (BLOCK_SIZE / sizeof(dir_entry_t))
+
 
 static inline bool valid_inumber(int inumber) {
     return inumber >= 0 && inumber < INODE_TABLE_SIZE;
@@ -48,6 +61,16 @@ static inline bool valid_file_handle(int file_handle) {
 }
 
 size_t state_block_size(void) { return BLOCK_SIZE; }
+
+/* Returns the lock associated with the given inumber */
+pthread_rwlock_t *get_inode_table_lock(int inumber) {
+    return &inode_table_locks[inumber];
+}
+
+/* Returns the lock associated with the given file handle */
+pthread_rwlock_t *get_open_file_table_lock(int file_handle) {
+    return &open_file_table_locks[file_handle];
+}
 
 /**
  * Do nothing, while preventing the compiler from performing any optimizations.
@@ -80,6 +103,88 @@ static void insert_delay(void) {
     }
 }
 
+
+/*
+ * Locks (and checks for errors) a given mutex
+ */
+void lock_mutex(pthread_mutex_t *mutex) {
+    if(pthread_mutex_lock(mutex) != 0) {
+        exit(EXIT_FAILURE);
+    }
+}
+
+/*
+ * Read-locks (and checks for errors) a given rwlock
+ */
+void read_lock_rwlock(pthread_rwlock_t *rwlock) {
+    if(pthread_rwlock_rdlock(rwlock) != 0) {
+        exit(EXIT_FAILURE);
+    }
+}
+
+/*
+ * Write-locks (and checks for errors) a given rwlock
+ */
+void write_lock_rwlock(pthread_rwlock_t *rwlock) {
+    if(pthread_rwlock_wrlock(rwlock) != 0) {
+        exit(EXIT_FAILURE);
+    }
+}
+
+/*
+ * Unlocks (and checks for errors) a given mutex
+ */
+void unlock_mutex(pthread_mutex_t *mutex) {
+    if(pthread_mutex_unlock(mutex) != 0) {
+        exit(EXIT_FAILURE);
+    }
+}
+
+/*
+ * Unlocks (and checks for errors) a given rwlock
+ */
+void unlock_rwlock(pthread_rwlock_t *rwlock) {
+    if(pthread_rwlock_unlock(rwlock) != 0) {
+        exit(EXIT_FAILURE);
+    }
+}
+
+/*
+ * Initializes (and checks for errors) a given mutex
+ */
+void init_mutex(pthread_mutex_t *mutex) {
+    if(pthread_mutex_init(mutex, NULL) != 0) {
+        exit(EXIT_FAILURE);
+    }
+}
+
+/*
+ * Initializes (and checks for errors) a given rwlock
+ */
+void init_rwlock(pthread_rwlock_t *rwlock) {
+    if(pthread_rwlock_init(rwlock, NULL) != 0) {
+        exit(EXIT_FAILURE);
+    }
+}
+
+/*
+ * Destroys (and checks for errors) a given mutex
+ */
+void destroy_mutex(pthread_mutex_t *mutex) {
+    if(pthread_mutex_destroy(mutex) != 0) {
+        exit(EXIT_FAILURE);
+    }
+}
+
+/*
+ * Destroys (and checks for errors) a given rwlock
+ */
+void destroy_rwlock(pthread_rwlock_t *rwlock) {
+    if(pthread_rwlock_destroy(rwlock) != 0) {
+        exit(EXIT_FAILURE);
+    }
+}
+
 /**
  * Initialize FS state.
  *
@@ -93,6 +198,8 @@ static void insert_delay(void) {
  *   - malloc failure when allocating TFS structures.
  */
 int state_init(tfs_params params) {
+    init_mutex(&open_files_mutex);
+    init_mutex(&open_file_lock);
     fs_params = params;
 
     if (inode_table != NULL) {
@@ -101,11 +208,28 @@ int state_init(tfs_params params) {
 
     inode_table = malloc(INODE_TABLE_SIZE * sizeof(inode_t));
     freeinode_ts = malloc(INODE_TABLE_SIZE * sizeof(allocation_state_t));
+    inode_table_locks = malloc(INODE_TABLE_SIZE * sizeof(pthread_rwlock_t));
     fs_data = malloc(DATA_BLOCKS * BLOCK_SIZE);
     free_blocks = malloc(DATA_BLOCKS * sizeof(allocation_state_t));
+    data_blocks_locks = malloc(DATA_BLOCKS * sizeof(pthread_rwlock_t));
     open_file_table = malloc(MAX_OPEN_FILES * sizeof(open_file_entry_t));
     free_open_file_entries =
         malloc(MAX_OPEN_FILES * sizeof(allocation_state_t));
+    open_file_table_locks = malloc(MAX_OPEN_FILES * sizeof(pthread_rwlock_t));
+    for (size_t i = 0; i < INODE_TABLE_SIZE; i++) {
+        destroy_rwlock(&inode_table_locks[i]);
+    }
+    for (size_t i = 0; i < DATA_BLOCKS; i++) {
+        destroy_rwlock(&data_blocks_locks[i]);
+    }
+    for (size_t i = 0; i < MAX_OPEN_FILES; i++) {
+        destroy_rwlock(&open_file_table_locks[i]);
+    }
+    for (size_t i = 0; i < MAX_DIR_ENTRIES; i++) {
+        destroy_rwlock(&dir_entries_locks[i]);
+    }es_locks = malloc(MAX_DIR_ENTRIES * sizeof(pthread_rwlock_t));
+
+    
 
     if (!inode_table || !freeinode_ts || !fs_data || !free_blocks ||
         !open_file_table || !free_open_file_entries) {
@@ -114,14 +238,21 @@ int state_init(tfs_params params) {
 
     for (size_t i = 0; i < INODE_TABLE_SIZE; i++) {
         freeinode_ts[i] = FREE;
+        init_rwlock(&inode_table_locks[i]);
     }
 
     for (size_t i = 0; i < DATA_BLOCKS; i++) {
         free_blocks[i] = FREE;
+         init_rwlock(&data_blocks_locks[i]);
     }
 
     for (size_t i = 0; i < MAX_OPEN_FILES; i++) {
         free_open_file_entries[i] = FREE;
+        init_rwlock(&open_file_table_locks[i]);
+    }
+
+    for (size_t i = 0; i < MAX_DIR_ENTRIES; i++) {
+        init_rwlock(&dir_entries_locks[i]);
     }
 
     return 0;
@@ -133,12 +264,30 @@ int state_init(tfs_params params) {
  * Returns 0 if succesful, -1 otherwise.
  */
 int state_destroy(void) {
+    destroy_mutex(&open_file_lock);
+    for (size_t i = 0; i < INODE_TABLE_SIZE; i++) {
+        destroy_rwlock(&inode_table_locks[i]);
+    }
+    for (size_t i = 0; i < DATA_BLOCKS; i++) {
+        destroy_rwlock(&data_blocks_locks[i]);
+    }
+    for (size_t i = 0; i < MAX_OPEN_FILES; i++) {
+        destroy_rwlock(&open_file_table_locks[i]);
+    }
+    for (size_t i = 0; i < MAX_DIR_ENTRIES; i++) {
+        destroy_rwlock(&dir_entries_locks[i]);
+    }
+
     free(inode_table);
     free(freeinode_ts);
     free(fs_data);
     free(free_blocks);
     free(open_file_table);
     free(free_open_file_entries);
+    free(inode_table_locks);
+    free(data_blocks_locks);
+    free(open_file_table_locks);
+    free(dir_entries_locks);
 
     inode_table = NULL;
     freeinode_ts = NULL;
@@ -146,6 +295,10 @@ int state_destroy(void) {
     free_blocks = NULL;
     open_file_table = NULL;
     free_open_file_entries = NULL;
+    inode_table_locks = NULL;
+    data_blocks_locks = NULL;
+    open_file_table_locks = NULL;
+    dir_entries_locks = NULL;
 
     return 0;
 }
@@ -165,15 +318,17 @@ static int inode_alloc(void) {
             insert_delay(); // simulate storage access delay (to freeinode_ts)
         }
 
+        write_lock_rwlock(&inode_table_locks[inumber]);
         // Finds first free entry in inode table
         if (freeinode_ts[inumber] == FREE) {
             //  Found a free entry, so takes it for the new inode
             freeinode_ts[inumber] = TAKEN;
+            unlock_rwlock(&inode_table_locks[inumber]);
 
             return (int)inumber;
         }
+        unlock_rwlock(&inode_table_locks[inumber]);
     }
-
     // no free inodes
     return -1;
 }
