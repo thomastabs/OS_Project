@@ -108,18 +108,28 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         // Truncate (if requested)
         if (mode & TFS_O_TRUNC) {
             if (inode->i_size > 0) {
+                pthread_rwlock_t *inode_lock = get_inode_table_lock(inum);
+                write_lock_rwlock(inode_lock);
+
                 data_block_free(inode->i_data_block);
                 inode->i_size = 0;
+
+                unlock_rwlock(inode_lock);
             }
         }
         // Determine initial offset
         if (mode & TFS_O_APPEND) {
+            pthread_rwlock_t *inode_lock = get_inode_table_lock(inum);
+            write_lock_rwlock(inode_lock);
+
             offset = inode->i_size;
 
             if ((inode->i_node_type == T_SYMLINK) && 
                 (tfs_lookup(inode->i_symlink_target) == -1)){
+                unlock_rwlock(inode_lock);
                 return -1;
             }
+            unlock_rwlock(inode_lock);
 
         } else {
             offset = 0;
@@ -320,9 +330,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         // The offs´et associated with the file handle is incremented accordingly
         file->of_offset += to_read;
     }
-    if (to_read == 0) {
-        buffer = '\0';
-    }
+
     unlock_rwlock(file_lock);
     unlock_rwlock(inode_lock);
     return (ssize_t)to_read;
