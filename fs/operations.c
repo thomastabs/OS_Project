@@ -85,7 +85,7 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     int inum = tfs_lookup(name);
     size_t offset;
 
-    if (inum >= 0) {
+    if (inum >= 0) {         
         // The file already exists
         inode_t *inode = inode_get(inum);
         ALWAYS_ASSERT(inode != NULL,
@@ -139,13 +139,18 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
             return -1;
         }
 
+        pthread_rwlock_t *inode_lock = get_inode_table_lock(inum);
+        write_lock_rwlock(inode_lock);
+
         // Add entry in the root directory
         if (add_dir_entry(root_dir_inode, name + 1, inum) == -1) {
             inode_delete(inum);
+            unlock_rwlock(inode_lock);
             return -1; // no space in directory
         }
 
         offset = 0;
+        unlock_rwlock(inode_lock);
     } else {
         return -1;
     }
@@ -161,23 +166,27 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 
 int tfs_sym_link(char const *target, char const *link_name) {
     inode_t *root = inode_get(ROOT_DIR_INUM); // 0 - root inumber
-    int target_inumber = tfs_lookup(target); // ve se o target existe
-    
+    int target_inumber = tfs_lookup(target);
     if (root == NULL || target_inumber == -1){
         return -1;
     }
 
     int symlink_inumber = inode_create(T_SYMLINK);
-    if (symlink_inumber == -1)
+    if (symlink_inumber == -1){
         return -1;
+    }    
     
     inode_t *symlink_inode = inode_get(symlink_inumber);
+    if (symlink_inode == NULL){
+        return -1;
+    }
+
     strncpy(symlink_inode->i_symlink_target, target, MAX_FILE_NAME - 1);
 
     int link = add_dir_entry(root, link_name + 1, symlink_inumber);
-    if (link == -1)
+    if (link == -1){
         return -1;
-        
+    }   
     return 0;
 }
 
@@ -186,25 +195,35 @@ int tfs_link(char const *target_file, char const *link_path){
     inode_t *root = inode_get(ROOT_DIR_INUM); // 0 - root inumber
     if (root == NULL){
         return -1;
-    }
+    }          
 
     int target_inumber = tfs_lookup(target_file);
     if (target_inumber == -1)
         return -1;
     
-    inode_t *target_inode = inode_get(target_inumber);
-    
-    if (target_inode->i_node_type & T_SYMLINK)
-        // bloqueia a tentativa de fzr hard link com um target Symbolic Link
-        return -1; 
-    
-    int link = add_dir_entry(root, link_path + 1, target_inumber);
-    if (link == -1)
-        return -1; 
-    
-    target_inode->i_hardlink_counter++;
-    return 0;
+    pthread_rwlock_t *inode_lock = get_inode_table_lock(target_inumber);
+    write_lock_rwlock(inode_lock);  
 
+    inode_t *target_inode = inode_get(target_inumber);
+    if (target_inode == NULL){
+        unlock_rwlock(inode_lock);
+        return -1;
+    }
+    
+    if (target_inode->i_node_type & T_SYMLINK){
+        // bloqueia a tentativa de fzr hard link com um target Symbolic Link
+        unlock_rwlock(inode_lock);
+        return -1; 
+    }
+
+    int link = add_dir_entry(root, link_path + 1, target_inumber);
+    if (link == -1){
+        unlock_rwlock(inode_lock);
+        return -1;
+    }     
+    target_inode->i_hardlink_counter++;
+    unlock_rwlock(inode_lock);
+    return 0;
 }
 
 int tfs_close(int fhandle) {
@@ -224,9 +243,15 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
         return -1;
     }
 
+    pthread_rwlock_t *file_lock = get_open_file_table_lock(fhandle);
+
     //  From the open file table entry, we get the inode
+    write_lock_rwlock(file_lock);
     inode_t *inode = inode_get(file->of_inumber);
     ALWAYS_ASSERT(inode != NULL, "tfs_write: inode of open file deleted");
+
+    pthread_rwlock_t *inode_lock = get_inode_table_lock(file->of_inumber);
+	write_lock_rwlock(inode_lock);
 
     // Determine how many bytes to write
     size_t block_size = state_block_size();
@@ -239,6 +264,8 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             // If empty file, allocate new block
             int bnum = data_block_alloc();
             if (bnum == -1) {
+                unlock_rwlock(file_lock);
+                unlock_rwlock(inode_lock);
                 return -1; // no space
             }
 
@@ -257,6 +284,8 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             inode->i_size = file->of_offset;
         }
     }
+    unlock_rwlock(file_lock); 
+    unlock_rwlock(inode_lock);
 
     return (ssize_t)to_write;
 }
@@ -266,12 +295,17 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
     if (file == NULL) {
         return -1;
     }
+    pthread_rwlock_t *file_lock = get_open_file_table_lock(fhandle);
 
     // From the open file table entry, we get the inode
+    write_lock_rwlock(file_lock);
     inode_t const *inode = inode_get(file->of_inumber);
     ALWAYS_ASSERT(inode != NULL, "tfs_read: inode of open file deleted");
 
+    pthread_rwlock_t *inode_lock = get_inode_table_lock(file->of_inumber);
+
     // Determine how many bytes to read
+    write_lock_rwlock(inode_lock);
     size_t to_read = inode->i_size - file->of_offset;
     if (to_read > len) {
         to_read = len;
@@ -289,7 +323,8 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
     if (to_read == 0) {
         buffer = '\0';
     }
-
+    unlock_rwlock(file_lock);
+    unlock_rwlock(inode_lock);
     return (ssize_t)to_read;
 }
 
@@ -300,11 +335,14 @@ int tfs_unlink(char const *target) {
     if (root == NULL || target_inumber == -1){
         return -1;
     }
+    pthread_rwlock_t *inode_lock = get_inode_table_lock(target_inumber);
+    write_lock_rwlock(inode_lock);  
 
     inode_t *target_inode = inode_get(target_inumber);
-    if (target_inode == NULL)
+    if (target_inode == NULL){
+        unlock_rwlock(inode_lock);
         return -1;
-
+    }
     if (target_inode->i_hardlink_counter >= 1 && !(target_inode->i_node_type & T_SYMLINK)){
         // aqui o target ou é um path de um hard link ou um fich normal
         target_inode->i_hardlink_counter--; 
@@ -312,19 +350,24 @@ int tfs_unlink(char const *target) {
             // apagar o unico hard link q tem com o proprio inode
             clear_dir_entry(root, target + 1);
             inode_delete(target_inumber);
+            unlock_rwlock(inode_lock);
             return 0;
         }
         clear_dir_entry(root, target + 1);
+        unlock_rwlock(inode_lock);
         return 0;
     } 
     else if (target_inode->i_node_type & T_SYMLINK) {
         clear_dir_entry(root, target + 1);
         inode_delete(target_inumber);
+        unlock_rwlock(inode_lock);
         return -1;
     }
-    else
+    else {
+        unlock_rwlock(inode_lock);
         return -1;
-}   
+    }   
+}
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     FILE* source_file = fopen(source_path, "r");
