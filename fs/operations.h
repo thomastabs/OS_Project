@@ -75,7 +75,7 @@ int tfs_sym_link(char const *target, char const *link_name);
  *
  * Returns 0 if successful, -1 otherwise.
  */
-int tfs_link(char const *target_file, char const *link_name);
+int tfs_link(char const *target, char const *link_name);
 
 /**
  * Looks for a file.

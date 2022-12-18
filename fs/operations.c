@@ -109,27 +109,29 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         if (mode & TFS_O_TRUNC) {
             if (inode->i_size > 0) {
                 pthread_rwlock_t *inode_lock = get_inode_table_lock(inum);
-                write_lock_rwlock(inode_lock);
+                write_lock_rwlock(inode_lock); // locks the latch to write
 
                 data_block_free(inode->i_data_block);
                 inode->i_size = 0;
 
-                unlock_rwlock(inode_lock);
+                unlock_rwlock(inode_lock); // after the changes, unlocks it
             }
         }
         // Determine initial offset
         if (mode & TFS_O_APPEND) {
             pthread_rwlock_t *inode_lock = get_inode_table_lock(inum);
-            write_lock_rwlock(inode_lock);
+            write_lock_rwlock(inode_lock); // locks the latch to write
 
             offset = inode->i_size;
 
+            // this if statement verifies if the target is in fact a sym link
+            // and if the file which target is saving still exists or not
             if ((inode->i_node_type == T_SYMLINK) &&
                 (tfs_lookup(inode->i_symlink_target) == -1)) {
                 unlock_rwlock(inode_lock);
                 return -1;
             }
-            unlock_rwlock(inode_lock);
+            unlock_rwlock(inode_lock); // after the changes, unlocks it
 
         } else {
             offset = 0;
@@ -142,6 +144,8 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
             return -1; // no space in inode table
         }
 
+        // this if statement verifies if the target is in fact a sym link
+        // and if the file which target is saving still exists or not
         inode_t *name_inode = inode_get(inum);
         if ((name_inode->i_node_type == T_SYMLINK) &&
             (tfs_lookup(name_inode->i_symlink_target) == -1) &&
@@ -150,17 +154,17 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         }
 
         pthread_rwlock_t *inode_lock = get_inode_table_lock(inum);
-        write_lock_rwlock(inode_lock);
+        write_lock_rwlock(inode_lock); // locks the latch to write
 
         // Add entry in the root directory
         if (add_dir_entry(root_dir_inode, name + 1, inum) == -1) {
             inode_delete(inum);
-            unlock_rwlock(inode_lock);
-            return -1; // no space in directory
+            unlock_rwlock(inode_lock); // after the changes, unlocks it
+            return -1;                 // no space in directory
         }
 
         offset = 0;
-        unlock_rwlock(inode_lock);
+        unlock_rwlock(inode_lock); // after the changes, unlocks it
     } else {
         return -1;
     }
@@ -175,24 +179,30 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 }
 
 int tfs_sym_link(char const *target, char const *link_name) {
-    inode_t *root = inode_get(ROOT_DIR_INUM); // 0 - root inumber
-    int target_inumber = tfs_lookup(target);
-    if (root == NULL || target_inumber == -1) {
+    inode_t *root = inode_get(ROOT_DIR_INUM);   // gets the root inode
+    int target_inumber = tfs_lookup(target);    // gets the target inumber
+    if (root == NULL || target_inumber == -1) { // checks if they're valid
         return -1;
     }
 
+    // creates a new inode of the type T_SYMLINK
     int symlink_inumber = inode_create(T_SYMLINK);
     if (symlink_inumber == -1) {
         return -1;
     }
 
+    // gets the new inode of the sym link to be used later
     inode_t *symlink_inode = inode_get(symlink_inumber);
     if (symlink_inode == NULL) {
         return -1;
     }
 
+    // copies the target path to the field that was created in the inode
+    // to save the target's path in the newly created sym link's inode
     strncpy(symlink_inode->i_symlink_target, target, MAX_FILE_NAME - 1);
 
+    // adds the directory entry on the root,
+    // with the link's name and with the sym link inumber
     int link = add_dir_entry(root, link_name + 1, symlink_inumber);
     if (link == -1) {
         return -1;
@@ -200,38 +210,41 @@ int tfs_sym_link(char const *target, char const *link_name) {
     return 0;
 }
 
-int tfs_link(char const *target_file, char const *link_path) {
-    inode_t *root = inode_get(ROOT_DIR_INUM); // 0 - root inumber
-    if (root == NULL) {
+int tfs_link(char const *target, char const *link_name) {
+    inode_t *root = inode_get(ROOT_DIR_INUM);   // gets the root inode
+    int target_inumber = tfs_lookup(target);    // gets the target inumber
+    if (root == NULL || target_inumber == -1) { // checks if they're valid
         return -1;
     }
 
-    int target_inumber = tfs_lookup(target_file);
-    if (target_inumber == -1)
-        return -1;
-
+    // gets the inode_lock and locks it for writing and safety purposes
     pthread_rwlock_t *inode_lock = get_inode_table_lock(target_inumber);
     write_lock_rwlock(inode_lock);
 
+    // gets the target inode and checks if its valid
     inode_t *target_inode = inode_get(target_inumber);
     if (target_inode == NULL) {
-        unlock_rwlock(inode_lock);
+        unlock_rwlock(inode_lock); // unlocks the latch
         return -1;
     }
 
+    // blocks any try to make a hard link with a sym link
     if (target_inode->i_node_type & T_SYMLINK) {
-        // bloqueia a tentativa de fzr hard link com um target Symbolic Link
-        unlock_rwlock(inode_lock);
+        unlock_rwlock(inode_lock); // unlocks the latch
         return -1;
     }
 
-    int link = add_dir_entry(root, link_path + 1, target_inumber);
+    // adds the directory entry on the root,
+    // with the link name and the target inumber
+    int link = add_dir_entry(root, link_name + 1, target_inumber);
     if (link == -1) {
-        unlock_rwlock(inode_lock);
+        unlock_rwlock(inode_lock); // unlocks the latch
         return -1;
     }
+
+    // increments the target_inode hard link counter
     target_inode->i_hardlink_counter++;
-    unlock_rwlock(inode_lock);
+    unlock_rwlock(inode_lock); // unlocks the latch
     return 0;
 }
 
@@ -253,14 +266,14 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
     }
 
     pthread_rwlock_t *file_lock = get_open_file_table_lock(fhandle);
+    write_lock_rwlock(file_lock); // locks the latch of the file
 
     //  From the open file table entry, we get the inode
-    write_lock_rwlock(file_lock);
     inode_t *inode = inode_get(file->of_inumber);
     ALWAYS_ASSERT(inode != NULL, "tfs_write: inode of open file deleted");
 
     pthread_rwlock_t *inode_lock = get_inode_table_lock(file->of_inumber);
-    write_lock_rwlock(inode_lock);
+    write_lock_rwlock(inode_lock); // locks the latch of the inode
 
     // Determine how many bytes to write
     size_t block_size = state_block_size();
@@ -273,7 +286,7 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             // If empty file, allocate new block
             int bnum = data_block_alloc();
             if (bnum == -1) {
-                unlock_rwlock(file_lock);
+                unlock_rwlock(file_lock); // unlocks the latches
                 unlock_rwlock(inode_lock);
                 return -1; // no space
             }
@@ -293,7 +306,7 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             inode->i_size = file->of_offset;
         }
     }
-    unlock_rwlock(file_lock);
+    unlock_rwlock(file_lock); // unlocks the latches
     unlock_rwlock(inode_lock);
 
     return (ssize_t)to_write;
@@ -305,16 +318,16 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         return -1;
     }
     pthread_rwlock_t *file_lock = get_open_file_table_lock(fhandle);
+    write_lock_rwlock(file_lock); // locks the latch of the file for writing
 
     // From the open file table entry, we get the inode
-    write_lock_rwlock(file_lock);
     inode_t const *inode = inode_get(file->of_inumber);
     ALWAYS_ASSERT(inode != NULL, "tfs_read: inode of open file deleted");
 
     pthread_rwlock_t *inode_lock = get_inode_table_lock(file->of_inumber);
+    write_lock_rwlock(inode_lock); // locks the latch of the inode for writing
 
     // Determine how many bytes to read
-    write_lock_rwlock(inode_lock);
     size_t to_read = inode->i_size - file->of_offset;
     if (to_read > len) {
         to_read = len;
@@ -331,7 +344,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         file->of_offset += to_read;
     }
 
-    unlock_rwlock(file_lock);
+    unlock_rwlock(file_lock); // unlocks the latches
     unlock_rwlock(inode_lock);
     return (ssize_t)to_read;
 }
@@ -343,34 +356,37 @@ int tfs_unlink(char const *target) {
         return -1;
     }
     pthread_rwlock_t *inode_lock = get_inode_table_lock(target_inumber);
-    write_lock_rwlock(inode_lock);
+    write_lock_rwlock(inode_lock); // locks the latch of the inode for writing
 
     inode_t *target_inode = inode_get(target_inumber);
     if (target_inode == NULL) {
-        unlock_rwlock(inode_lock);
+        unlock_rwlock(inode_lock); // unlocks the latches
         return -1;
     }
     if (target_inode->i_hardlink_counter >= 1 &&
         !(target_inode->i_node_type & T_SYMLINK)) {
-        // aqui o target ou é um path de um hard link ou um fich normal
+        // here the target file itself is a file or a hard link
         target_inode->i_hardlink_counter--;
         if (target_inode->i_hardlink_counter == 0) {
-            // apagar o unico hard link q tem com o proprio inode
-            clear_dir_entry(root, target + 1);
-            inode_delete(target_inumber);
-            unlock_rwlock(inode_lock);
+            // if it hits zero then the inode is deleted
+            clear_dir_entry(root, target + 1); // clear the directory entry
+            inode_delete(target_inumber);      // deletes the inode
+            unlock_rwlock(inode_lock);         // unlocks the latches
             return 0;
         }
+        // if not, it just clears the directory and unlocks the inode latch
         clear_dir_entry(root, target + 1);
         unlock_rwlock(inode_lock);
         return 0;
     } else if (target_inode->i_node_type & T_SYMLINK) {
+        // if the target is a sym link then it deletes the inode
+        // and clears the respective directory entry
         clear_dir_entry(root, target + 1);
         inode_delete(target_inumber);
-        unlock_rwlock(inode_lock);
+        unlock_rwlock(inode_lock); // unlocks the latch
         return -1;
     } else {
-        unlock_rwlock(inode_lock);
+        unlock_rwlock(inode_lock); // unlocks the latch
         return -1;
     }
 }
