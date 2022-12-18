@@ -305,7 +305,8 @@ static int inode_alloc(void) {
         if (freeinode_ts[inumber] == FREE) {
             //  Found a free entry, so takes it for the new inode
             freeinode_ts[inumber] = TAKEN;
-            unlock_rwlock(&inode_table_locks[inumber]); // if free, then unlocks the latch
+            unlock_rwlock(
+                &inode_table_locks[inumber]); // if free, then unlocks the latch
 
             return (int)inumber;
         }
@@ -446,18 +447,18 @@ inode_t *inode_get(int inumber) {
 int clear_dir_entry(inode_t *inode, char const *sub_name) {
     insert_delay();
 
-    // locks for reading, for the safe use of the if statement  
+    // locks for reading, for the safe use of the if statement
     read_lock_rwlock(&inode_table_locks[ROOT_DIR_INUM]);
     if (inode->i_node_type != T_DIRECTORY) {
         // if not a directory, unlocks the latch
-        unlock_rwlock(&inode_table_locks[ROOT_DIR_INUM]); 
+        unlock_rwlock(&inode_table_locks[ROOT_DIR_INUM]);
         return -1; // not a directory
     }
     unlock_rwlock(&inode_table_locks[ROOT_DIR_INUM]);
 
     // Locates the block containing the entries of the directory
 
-    // locks for reading, for the safe purposes  
+    // locks for reading, for the safe purposes
     read_lock_rwlock(&inode_table_locks[ROOT_DIR_INUM]);
     dir_entry_t *dir_entry = (dir_entry_t *)data_block_get(inode->i_data_block);
     ALWAYS_ASSERT(dir_entry != NULL,
@@ -474,7 +475,7 @@ int clear_dir_entry(inode_t *inode, char const *sub_name) {
             unlock_rwlock(&dir_entries_locks[i]); // then its unlocked
             return 0;
         }
-        // then after its use, its unlocked 
+        // then after its use, its unlocked
         unlock_rwlock(&dir_entries_locks[i]);
     }
     return -1; // sub_name not found
@@ -502,7 +503,7 @@ int add_dir_entry(inode_t *inode, char const *sub_name, int sub_inumber) {
 
     insert_delay(); // simulate storage access delay to inode with inumber
 
-    // locks for reading, for safe purposes 
+    // locks for reading, for safe purposes
     read_lock_rwlock(&inode_table_locks[ROOT_DIR_INUM]);
     if (inode->i_node_type != T_DIRECTORY) {
         unlock_rwlock(&inode_table_locks[ROOT_DIR_INUM]);
@@ -511,7 +512,6 @@ int add_dir_entry(inode_t *inode, char const *sub_name, int sub_inumber) {
     unlock_rwlock(&inode_table_locks[ROOT_DIR_INUM]);
     // after its use in the if statement its unlocked
 
-    
     // Locates the block containing the entries of the directory
     // but first, locks for reading, for safe purposes
     read_lock_rwlock(&inode_table_locks[ROOT_DIR_INUM]);
@@ -558,11 +558,11 @@ int find_in_dir(inode_t const *inode, char const *sub_name) {
 
     insert_delay(); // simulate storage access delay to inode with inumber
 
-    // locks for reading safely 
+    // locks for reading safely
     read_lock_rwlock(&inode_table_locks[ROOT_DIR_INUM]);
     if (inode->i_node_type != T_DIRECTORY) {
         // if not a directory, then it unlocks
-        unlock_rwlock(&inode_table_locks[ROOT_DIR_INUM]); 
+        unlock_rwlock(&inode_table_locks[ROOT_DIR_INUM]);
         return -1; // not a directory
     }
 
@@ -572,18 +572,18 @@ int find_in_dir(inode_t const *inode, char const *sub_name) {
     ALWAYS_ASSERT(dir_entry != NULL,
                   "find_in_dir: directory inode must have a data block");
 
-    // Iterates over the directory entries 
+    // Iterates over the directory entries
     // looking for one that has the target name
     for (int i = 0; i < MAX_DIR_ENTRIES; i++) {
         // locks for reading safely the directory attributes
         read_lock_rwlock(&dir_entries_locks[i]);
         if ((dir_entry[i].d_inumber != -1) &&
             (strncmp(dir_entry[i].d_name, sub_name, MAX_FILE_NAME) == 0)) {
-            unlock_rwlock(&dir_entries_locks[i]);  // unlocks after its use
+            unlock_rwlock(&dir_entries_locks[i]); // unlocks after its use
             int sub_inumber = dir_entry[i].d_inumber;
             return sub_inumber;
         }
-        unlock_rwlock(&dir_entries_locks[i]); // then in the end it unlocks 
+        unlock_rwlock(&dir_entries_locks[i]); // then in the end it unlocks
     }
     return -1; // entry not found
 }
@@ -598,7 +598,7 @@ int find_in_dir(inode_t const *inode, char const *sub_name) {
  */
 int data_block_alloc(void) {
     for (size_t i = 0; i < DATA_BLOCKS; i++) {
-        // locks for safely writing 
+        // locks for safely writing
         write_lock_rwlock(&data_blocks_locks[i]);
         if (i * sizeof(allocation_state_t) % BLOCK_SIZE == 0) {
             insert_delay(); // simulate storage access delay to free_blocks
@@ -666,8 +666,8 @@ int add_to_open_file_table(int inumber, size_t offset) {
             free_open_file_entries[i] = TAKEN;
             open_file_table[i].of_inumber = inumber;
             open_file_table[i].of_offset = offset;
-            unlock_rwlock(&open_file_table_locks[i]); // then its unlocked 
-            unlock_mutex(&open_files_mutex); // then its unlocked
+            unlock_rwlock(&open_file_table_locks[i]); // then its unlocked
+            unlock_mutex(&open_files_mutex);          // then its unlocked
             return i;
         }
         unlock_rwlock(&open_file_table_locks[i]);
@@ -684,16 +684,17 @@ int add_to_open_file_table(int inumber, size_t offset) {
  */
 void remove_from_open_file_table(int fhandle) {
     read_lock_rwlock(&open_file_table_locks[fhandle]);
-    // locks for safe reading 
+    // locks for safe reading
     ALWAYS_ASSERT(valid_file_handle(fhandle),
                   "remove_from_open_file_table: file handle must be valid");
-    lock_mutex(&open_files_mutex); // also locks the mutex for even more security 
+    lock_mutex(
+        &open_files_mutex); // also locks the mutex for even more security
     ALWAYS_ASSERT(free_open_file_entries[fhandle] == TAKEN,
                   "remove_from_open_file_table: file handle must be taken");
 
     free_open_file_entries[fhandle] = FREE;
-    unlock_mutex(&open_files_mutex);                  // then after its use, 
-    unlock_rwlock(&open_file_table_locks[fhandle]);   // both latches are unlocked
+    unlock_mutex(&open_files_mutex);                // then after its use,
+    unlock_rwlock(&open_file_table_locks[fhandle]); // both latches are unlocked
 }
 
 /**
