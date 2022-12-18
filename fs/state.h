@@ -4,11 +4,11 @@
 #include "config.h"
 #include "operations.h"
 
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
-#include <pthread.h>
 
 /**
  * Directory entry
@@ -18,7 +18,7 @@ typedef struct {
     int d_inumber;
 } dir_entry_t;
 
-typedef enum {T_FILE, T_DIRECTORY, T_SYMLINK } inode_type;
+typedef enum { T_FILE, T_DIRECTORY, T_SYMLINK } inode_type;
 // adicionado um tipo de inode para symlink
 
 /**

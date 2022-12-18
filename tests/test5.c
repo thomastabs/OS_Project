@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
-// Sym Link Test, target path check, 
+// Sym Link Test, target path check,
 // hard link with soft link test and vice versa
 
 uint8_t const file_contents[] = "AAA!";
@@ -36,14 +36,15 @@ void write_contents(char const *path) {
     assert(tfs_close(f) != -1);
 }
 
-int check_target_path_in_symLink(char const *link_path, char const *target_path){
+int check_target_path_in_symLink(char const *link_path,
+                                 char const *target_path) {
     int link_path_inum = tfs_lookup(link_path);
     if (link_path_inum == -1)
-        return -1; 
+        return -1;
 
     int target_inum = tfs_lookup(target_path);
     if (target_inum == -1)
-        return -1; 
+        return -1;
 
     inode_t *link_path_inode = inode_get(link_path_inum);
     if (link_path_inode == NULL)
@@ -54,7 +55,7 @@ int check_target_path_in_symLink(char const *link_path, char const *target_path)
     return -1;
 }
 
-int main(){
+int main() {
     assert(tfs_init(NULL) != -1);
 
     int f = tfs_open(target_path1, TFS_O_CREAT);
@@ -64,17 +65,17 @@ int main(){
     // a symbolic link is created and then we search for him in the system
     // to verify if he was really created
     assert(tfs_sym_link(target_path1, link_path1) != -1);
-    
+
     int i = tfs_open(link_path1, 0);
     assert(i != -1);
     assert(tfs_close(i) != -1);
 
-    // after checking if the symbolic link was created, 
-    // lets check if the path of the target was saved sucessfully on the 
-    // SymLink file that was created 
+    // after checking if the symbolic link was created,
+    // lets check if the path of the target was saved sucessfully on the
+    // SymLink file that was created
     assert(check_target_path_in_symLink(link_path1, target_path1) == 0);
 
-    // now that the target has been sucessfully saved, lets try to 
+    // now that the target has been sucessfully saved, lets try to
     // write on the target and access it via the symbolic link path
 
     write_contents(target_path1);
@@ -87,8 +88,8 @@ int main(){
     // and a soft link with a hard link? well it should work because
     // the symbolic still would be acessing the target's inode, through
     // the hard link's inode which is the target's
-   
-    assert(tfs_link(target_path1, link_path2) == 0);   
+
+    assert(tfs_link(target_path1, link_path2) == 0);
 
     assert(tfs_sym_link(link_path1, link_path2) == 0);
 

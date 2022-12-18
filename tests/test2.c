@@ -5,9 +5,11 @@
 
 int main() {
 
-    // Testa se com muitos espaços não confude a função do tfs_copy_from_external_fs
- 
-    char *str_ext_file = "rea         huiohghj2    woi'fjnhdi       0nq35i 0easr  ++++  djiopvf mzxf'o zgmb'qite mndwihn ";
+    // Testa se com muitos espaços não confude a função do
+    // tfs_copy_from_external_fs
+
+    char *str_ext_file = "rea         huiohghj2    woi'fjnhdi       0nq35i "
+                         "0easr  ++++  djiopvf mzxf'o zgmb'qite mndwihn ";
     char *path_copied_file = "/f1";
     char *path_src = "tests/file_to_copy2.txt";
     char buffer[100];

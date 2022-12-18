@@ -34,7 +34,6 @@ static pthread_rwlock_t *open_file_table_locks;
 /* Locks for directories */
 static pthread_rwlock_t *dir_entries_locks;
 
-
 pthread_mutex_t open_files_mutex;
 pthread_mutex_t open_file_lock;
 
@@ -44,7 +43,6 @@ pthread_mutex_t open_file_lock;
 #define MAX_OPEN_FILES (fs_params.max_open_files_count)
 #define BLOCK_SIZE (fs_params.block_size)
 #define MAX_DIR_ENTRIES (BLOCK_SIZE / sizeof(dir_entry_t))
-
 
 static inline bool valid_inumber(int inumber) {
     return inumber >= 0 && inumber < INODE_TABLE_SIZE;
@@ -101,12 +99,11 @@ static void insert_delay(void) {
     }
 }
 
-
 /*
  * Locks (and checks for errors) a given mutex
  */
 void lock_mutex(pthread_mutex_t *mutex) {
-    if(pthread_mutex_lock(mutex) != 0) {
+    if (pthread_mutex_lock(mutex) != 0) {
         exit(EXIT_FAILURE);
     }
 }
@@ -115,7 +112,7 @@ void lock_mutex(pthread_mutex_t *mutex) {
  * Read-locks (and checks for errors) a given rwlock
  */
 void read_lock_rwlock(pthread_rwlock_t *rwlock) {
-    if(pthread_rwlock_rdlock(rwlock) != 0) {
+    if (pthread_rwlock_rdlock(rwlock) != 0) {
         exit(EXIT_FAILURE);
     }
 }
@@ -124,7 +121,7 @@ void read_lock_rwlock(pthread_rwlock_t *rwlock) {
  * Write-locks (and checks for errors) a given rwlock
  */
 void write_lock_rwlock(pthread_rwlock_t *rwlock) {
-    if(pthread_rwlock_wrlock(rwlock) != 0) {
+    if (pthread_rwlock_wrlock(rwlock) != 0) {
         exit(EXIT_FAILURE);
     }
 }
@@ -133,7 +130,7 @@ void write_lock_rwlock(pthread_rwlock_t *rwlock) {
  * Unlocks (and checks for errors) a given mutex
  */
 void unlock_mutex(pthread_mutex_t *mutex) {
-    if(pthread_mutex_unlock(mutex) != 0) {
+    if (pthread_mutex_unlock(mutex) != 0) {
         exit(EXIT_FAILURE);
     }
 }
@@ -142,7 +139,7 @@ void unlock_mutex(pthread_mutex_t *mutex) {
  * Unlocks (and checks for errors) a given rwlock
  */
 void unlock_rwlock(pthread_rwlock_t *rwlock) {
-    if(pthread_rwlock_unlock(rwlock) != 0) {
+    if (pthread_rwlock_unlock(rwlock) != 0) {
         exit(EXIT_FAILURE);
     }
 }
@@ -151,7 +148,7 @@ void unlock_rwlock(pthread_rwlock_t *rwlock) {
  * Initializes (and checks for errors) a given mutex
  */
 void init_mutex(pthread_mutex_t *mutex) {
-    if(pthread_mutex_init(mutex, NULL) != 0) {
+    if (pthread_mutex_init(mutex, NULL) != 0) {
         exit(EXIT_FAILURE);
     }
 }
@@ -160,7 +157,7 @@ void init_mutex(pthread_mutex_t *mutex) {
  * Initializes (and checks for errors) a given rwlock
  */
 void init_rwlock(pthread_rwlock_t *rwlock) {
-    if(pthread_rwlock_init(rwlock, NULL) != 0) {
+    if (pthread_rwlock_init(rwlock, NULL) != 0) {
         exit(EXIT_FAILURE);
     }
 }
@@ -169,7 +166,7 @@ void init_rwlock(pthread_rwlock_t *rwlock) {
  * Destroys (and checks for errors) a given mutex
  */
 void destroy_mutex(pthread_mutex_t *mutex) {
-    if(pthread_mutex_destroy(mutex) != 0) {
+    if (pthread_mutex_destroy(mutex) != 0) {
         exit(EXIT_FAILURE);
     }
 }
@@ -178,7 +175,7 @@ void destroy_mutex(pthread_mutex_t *mutex) {
  * Destroys (and checks for errors) a given rwlock
  */
 void destroy_rwlock(pthread_rwlock_t *rwlock) {
-    if(pthread_rwlock_destroy(rwlock) != 0) {
+    if (pthread_rwlock_destroy(rwlock) != 0) {
         exit(EXIT_FAILURE);
     }
 }
@@ -407,13 +404,13 @@ void inode_delete(int inumber) {
                   "inode_delete: inode already freed");
 
     if (inode_table[inumber].i_size > 0) {
-        write_lock_rwlock(&data_blocks_locks[inode_table[inumber].i_data_block]);
+        write_lock_rwlock(
+            &data_blocks_locks[inode_table[inumber].i_data_block]);
         data_block_free(inode_table[inumber].i_data_block);
         unlock_rwlock(&data_blocks_locks[inode_table[inumber].i_data_block]);
     }
     freeinode_ts[inumber] = FREE;
 }
-
 
 /**
  * Obtain a pointer to an inode from its inumber.
@@ -553,7 +550,7 @@ int find_in_dir(inode_t const *inode, char const *sub_name) {
 
     // Iterates over the directory entries looking for one that has the target
     // name
-    for (int i = 0; i < MAX_DIR_ENTRIES; i++){
+    for (int i = 0; i < MAX_DIR_ENTRIES; i++) {
         read_lock_rwlock(&dir_entries_locks[i]);
         if ((dir_entry[i].d_inumber != -1) &&
             (strncmp(dir_entry[i].d_name, sub_name, MAX_FILE_NAME) == 0)) {
@@ -602,7 +599,7 @@ void data_block_free(int block_number) {
                   "data_block_free: invalid block number");
 
     insert_delay(); // simulate storage access delay to free_blocks
-    
+
     free_blocks[block_number] = FREE;
 }
 

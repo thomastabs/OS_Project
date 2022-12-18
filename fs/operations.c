@@ -63,7 +63,7 @@ static bool valid_pathname(char const *name) {
  */
 int tfs_lookup(char const *name) {
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
-    
+
     if (!valid_pathname(name)) {
         return -1;
     }
@@ -85,21 +85,21 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     int inum = tfs_lookup(name);
     size_t offset;
 
-    if (inum >= 0) {         
+    if (inum >= 0) {
         // The file already exists
         inode_t *inode = inode_get(inum);
         ALWAYS_ASSERT(inode != NULL,
                       "tfs_open: directory files must have an inode");
 
-        // if the target is a SymLink type of file, 
+        // if the target is a SymLink type of file,
         // then instead of opening of the symlink file
-        // itself, the symlink target path is the one 
-        // opened by overwriting the values already made 
-        if (inode->i_node_type == T_SYMLINK){
+        // itself, the symlink target path is the one
+        // opened by overwriting the values already made
+        if (inode->i_node_type == T_SYMLINK) {
             inum = tfs_lookup(inode->i_symlink_target);
             if (inum == -1)
                 return -1;
-            
+
             inode = inode_get(inum);
             if (inode == NULL)
                 return -1;
@@ -124,8 +124,8 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 
             offset = inode->i_size;
 
-            if ((inode->i_node_type == T_SYMLINK) && 
-                (tfs_lookup(inode->i_symlink_target) == -1)){
+            if ((inode->i_node_type == T_SYMLINK) &&
+                (tfs_lookup(inode->i_symlink_target) == -1)) {
                 unlock_rwlock(inode_lock);
                 return -1;
             }
@@ -143,9 +143,9 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         }
 
         inode_t *name_inode = inode_get(inum);
-        if ((name_inode->i_node_type == T_SYMLINK) && 
-        (tfs_lookup(name_inode->i_symlink_target) == -1) &&
-            (mode != TFS_O_CREAT)){
+        if ((name_inode->i_node_type == T_SYMLINK) &&
+            (tfs_lookup(name_inode->i_symlink_target) == -1) &&
+            (mode != TFS_O_CREAT)) {
             return -1;
         }
 
@@ -177,60 +177,59 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 int tfs_sym_link(char const *target, char const *link_name) {
     inode_t *root = inode_get(ROOT_DIR_INUM); // 0 - root inumber
     int target_inumber = tfs_lookup(target);
-    if (root == NULL || target_inumber == -1){
+    if (root == NULL || target_inumber == -1) {
         return -1;
     }
 
     int symlink_inumber = inode_create(T_SYMLINK);
-    if (symlink_inumber == -1){
+    if (symlink_inumber == -1) {
         return -1;
-    }    
-    
+    }
+
     inode_t *symlink_inode = inode_get(symlink_inumber);
-    if (symlink_inode == NULL){
+    if (symlink_inode == NULL) {
         return -1;
     }
 
     strncpy(symlink_inode->i_symlink_target, target, MAX_FILE_NAME - 1);
 
     int link = add_dir_entry(root, link_name + 1, symlink_inumber);
-    if (link == -1){
+    if (link == -1) {
         return -1;
-    }   
+    }
     return 0;
 }
 
-
-int tfs_link(char const *target_file, char const *link_path){
+int tfs_link(char const *target_file, char const *link_path) {
     inode_t *root = inode_get(ROOT_DIR_INUM); // 0 - root inumber
-    if (root == NULL){
+    if (root == NULL) {
         return -1;
-    }          
+    }
 
     int target_inumber = tfs_lookup(target_file);
     if (target_inumber == -1)
         return -1;
-    
+
     pthread_rwlock_t *inode_lock = get_inode_table_lock(target_inumber);
-    write_lock_rwlock(inode_lock);  
+    write_lock_rwlock(inode_lock);
 
     inode_t *target_inode = inode_get(target_inumber);
-    if (target_inode == NULL){
+    if (target_inode == NULL) {
         unlock_rwlock(inode_lock);
         return -1;
     }
-    
-    if (target_inode->i_node_type & T_SYMLINK){
+
+    if (target_inode->i_node_type & T_SYMLINK) {
         // bloqueia a tentativa de fzr hard link com um target Symbolic Link
         unlock_rwlock(inode_lock);
-        return -1; 
+        return -1;
     }
 
     int link = add_dir_entry(root, link_path + 1, target_inumber);
-    if (link == -1){
+    if (link == -1) {
         unlock_rwlock(inode_lock);
         return -1;
-    }     
+    }
     target_inode->i_hardlink_counter++;
     unlock_rwlock(inode_lock);
     return 0;
@@ -261,7 +260,7 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
     ALWAYS_ASSERT(inode != NULL, "tfs_write: inode of open file deleted");
 
     pthread_rwlock_t *inode_lock = get_inode_table_lock(file->of_inumber);
-	write_lock_rwlock(inode_lock);
+    write_lock_rwlock(inode_lock);
 
     // Determine how many bytes to write
     size_t block_size = state_block_size();
@@ -294,7 +293,7 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             inode->i_size = file->of_offset;
         }
     }
-    unlock_rwlock(file_lock); 
+    unlock_rwlock(file_lock);
     unlock_rwlock(inode_lock);
 
     return (ssize_t)to_write;
@@ -327,7 +326,8 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 
         // Perform the actual read
         memcpy(buffer, block + file->of_offset, to_read);
-        // The offs´et associated with the file handle is incremented accordingly
+        // The offs´et associated with the file handle is incremented
+        // accordingly
         file->of_offset += to_read;
     }
 
@@ -336,25 +336,25 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
     return (ssize_t)to_read;
 }
 
-
 int tfs_unlink(char const *target) {
     inode_t *root = inode_get(ROOT_DIR_INUM); // 0 - root inumber
-    int target_inumber = tfs_lookup(target); // ve se o target existe
-    if (root == NULL || target_inumber == -1){
+    int target_inumber = tfs_lookup(target);  // ve se o target existe
+    if (root == NULL || target_inumber == -1) {
         return -1;
     }
     pthread_rwlock_t *inode_lock = get_inode_table_lock(target_inumber);
-    write_lock_rwlock(inode_lock);  
+    write_lock_rwlock(inode_lock);
 
     inode_t *target_inode = inode_get(target_inumber);
-    if (target_inode == NULL){
+    if (target_inode == NULL) {
         unlock_rwlock(inode_lock);
         return -1;
     }
-    if (target_inode->i_hardlink_counter >= 1 && !(target_inode->i_node_type & T_SYMLINK)){
+    if (target_inode->i_hardlink_counter >= 1 &&
+        !(target_inode->i_node_type & T_SYMLINK)) {
         // aqui o target ou é um path de um hard link ou um fich normal
-        target_inode->i_hardlink_counter--; 
-        if (target_inode->i_hardlink_counter == 0){
+        target_inode->i_hardlink_counter--;
+        if (target_inode->i_hardlink_counter == 0) {
             // apagar o unico hard link q tem com o proprio inode
             clear_dir_entry(root, target + 1);
             inode_delete(target_inumber);
@@ -364,21 +364,19 @@ int tfs_unlink(char const *target) {
         clear_dir_entry(root, target + 1);
         unlock_rwlock(inode_lock);
         return 0;
-    } 
-    else if (target_inode->i_node_type & T_SYMLINK) {
+    } else if (target_inode->i_node_type & T_SYMLINK) {
         clear_dir_entry(root, target + 1);
         inode_delete(target_inumber);
         unlock_rwlock(inode_lock);
         return -1;
-    }
-    else {
+    } else {
         unlock_rwlock(inode_lock);
         return -1;
-    }   
+    }
 }
 
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
-    FILE* source_file = fopen(source_path, "r");
+    FILE *source_file = fopen(source_path, "r");
     if (source_file == NULL) {
         return -1;
     }
@@ -408,7 +406,8 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
 
     do {
         memset(buffer, 0, tfs_default_params().block_size);
-        bytes_read = fread(buffer, 1, tfs_default_params().block_size, source_file);
+        bytes_read =
+            fread(buffer, 1, tfs_default_params().block_size, source_file);
         if (bytes_read == -1) {
             free(buffer);
             return -1;
@@ -419,7 +418,9 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
             free(buffer);
             return -1;
         }
-    } while (bytes_read == tfs_default_params().block_size); // stops when it reads less than BLOCK_SIZE bytes
+    } while (bytes_read ==
+             tfs_default_params()
+                 .block_size); // stops when it reads less than BLOCK_SIZE bytes
 
     free(buffer);
 
@@ -427,6 +428,5 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     if (tfs_close(dest_handle) == -1) {
         return -1;
     }
-    return 0; 
-
+    return 0;
 }

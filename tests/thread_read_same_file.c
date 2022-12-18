@@ -78,12 +78,13 @@ void *read_fn(void *input) {
     int f = tfs_open(TFS_FILE, 0);
     assert(f != -1);
 
-    size_t bytes_read_external = fread(buffer_external, sizeof(char), BUFFER_LEN, fd);
+    size_t bytes_read_external =
+        fread(buffer_external, sizeof(char), BUFFER_LEN, fd);
     ssize_t bytes_read_tfs = tfs_read(f, buffer_tfs, BUFFER_LEN);
     while (bytes_read_external > 0 && bytes_read_tfs > 0) {
         assert(strncmp(buffer_external, buffer_tfs, BUFFER_LEN) == 0);
         bytes_read_external =
-        fread(buffer_external, sizeof(char), BUFFER_LEN, fd);
+            fread(buffer_external, sizeof(char), BUFFER_LEN, fd);
         bytes_read_tfs = tfs_read(f, buffer_tfs, BUFFER_LEN);
     }
 
