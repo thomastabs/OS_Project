@@ -1,7 +1,5 @@
 #include "fs/operations.h"
 #include <assert.h>
-#include <errno.h>
-#include <fcntl.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,54 +12,19 @@
 #define INPUT_FILE "tests/input1.txt"
 #define TFS_FILE "/f1"
 
-void write_fn();
-void *read_fn(void *ignore);
-
-/* This test fills a file with large content, and then attempts to read from it
+/* This test fills a file with medium size content, and then tries to read from it
  * simultaneously in multiple threads, comparing the content with the original
- * source. */
-int main() {
-    assert(tfs_init(NULL) != -1);
-
-    pthread_t tid[THREAD_NUM];
-
-    write_fn();
-    for (int i = 0; i < THREAD_NUM; i++) {
-        assert(pthread_create(&tid[i], NULL, read_fn, NULL) == 0);
-    }
-
-    for (int i = 0; i < THREAD_NUM; i++) {
-        assert(pthread_join(tid[i], NULL) == 0);
-    }
-
-    assert(tfs_destroy() == 0);
-    printf("Successful test.\n");
-
-    return 0;
-}
+ * file */
 
 void write_fn() {
-    FILE *fd = fopen(INPUT_FILE, "r");
-    assert(fd != NULL);
-
-    char buffer[BUFFER_LEN];
-    memset(buffer, 0, sizeof(buffer));
-
     int f = tfs_open(TFS_FILE, TFS_O_CREAT | TFS_O_TRUNC);
     assert(f != -1);
 
-    ssize_t r;
-    size_t bytes_read = fread(buffer, sizeof(char), BUFFER_LEN, fd);
-
-    while (bytes_read > 0) {
-        /* write the contents of the file */
-        r = tfs_write(f, buffer, bytes_read);
-        assert(r == bytes_read);
-        bytes_read = fread(buffer, sizeof(char), BUFFER_LEN, fd);
-    }
+    // copies the content of the input file to the newly created file
+    int i = tfs_copy_from_external_fs(INPUT_FILE, TFS_FILE);
+    assert(i == 0);
 
     assert(tfs_close(f) == 0);
-    assert(fclose(fd) == 0);
 }
 
 void *read_fn(void *input) {
@@ -72,15 +35,19 @@ void *read_fn(void *input) {
 
     char buffer_external[BUFFER_LEN];
     char buffer_tfs[BUFFER_LEN];
-    memset(buffer_external, 0, sizeof(buffer_external));
+    // memset the buffers to 0 to clean the newly created buffers 
+    memset(buffer_external, 0, sizeof(buffer_external)); 
     memset(buffer_external, 0, sizeof(buffer_tfs));
 
     int f = tfs_open(TFS_FILE, 0);
     assert(f != -1);
 
+    // after opening the file, lets check if whats read in the fd file is 
+    // equal to whats read in the file opened with tfs_read
     size_t bytes_read_external =
         fread(buffer_external, sizeof(char), BUFFER_LEN, fd);
     ssize_t bytes_read_tfs = tfs_read(f, buffer_tfs, BUFFER_LEN);
+    
     while (bytes_read_external > 0 && bytes_read_tfs > 0) {
         assert(strncmp(buffer_external, buffer_tfs, BUFFER_LEN) == 0);
         bytes_read_external =
@@ -97,3 +64,31 @@ void *read_fn(void *input) {
 
     return NULL;
 }
+
+int main() {
+    assert(tfs_init(NULL) != -1);
+
+    pthread_t tid[THREAD_NUM];
+
+    // this function will write and check the contents of 
+    // its content to initiate the test
+    write_fn();
+
+    for (int i = 0; i < THREAD_NUM; i++) {
+        // then we create the new threads to use the tfs_copy_from_external 
+        // function which will check if the content of the files is correct
+        assert(pthread_create(&tid[i], NULL, read_fn, NULL) == 0);
+    }
+
+    for (int i = 0; i < THREAD_NUM; i++) {
+        assert(pthread_join(tid[i], NULL) == 0);
+        // then we wait for the respective threads
+    }
+
+    assert(tfs_destroy() == 0);
+    printf("Successful test.\n");
+
+    return 0;
+}
+
+

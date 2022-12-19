@@ -5,8 +5,8 @@
 
 int main() {
 
-    // Testa se com muitos espaços não confude a função do
-    // tfs_copy_from_external_fs
+    // Tests with a long string full of spaces and random numbers, 
+    // and letters, if its copied correctly with tfs_copy_from_external_fs
 
     char *str_ext_file = "rea         huiohghj2    woi'fjnhdi       0nq35i "
                          "0easr  ++++  djiopvf mzxf'o zgmb'qite mndwihn ";
