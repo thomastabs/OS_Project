@@ -21,7 +21,7 @@ char *tfs_files[] = {"/f1", "/f2", "/f3", "/f4"};
 
 /* This test creates multiple files simultaneously and fill them up with
  * different content. Additionally, various writes are performed that may go
- * over blocks, making sure there is thread-safety when using tfs_write
+ * over blocks; making sure there is thread-safety when using tfs_write
  * over multiple data blocks. Finally, the contents of each file are read and
  * compared with the original files. */
 
