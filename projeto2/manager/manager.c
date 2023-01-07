@@ -1,3 +1,15 @@
+#include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include "../utils/common.h"
 #include "logging.h"
 
 static void print_usage() {
@@ -7,9 +19,135 @@ static void print_usage() {
                     "   manager <register_pipe> <pipe_name> list\n");
 }
 
+// helper function to send messages
+// retries to send whatever was not sent in the begginning
+int write_msg(int tx, char *str) {
+    size_t len = strlen(str);
+    size_t written = 0;
+
+    while (written < len) {
+        ssize_t ret = write(tx, str + written, len - written);
+        if (ret < 0) {
+            fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
+            return -1;
+        }
+        written += (size_t) ret;
+    }
+    return 0;
+}
+
+
+int send_request_create_box(char* server_pipe, char* client_pipe, char* box){
+    char server_request[sizeof(uint8_t) + MAX_CLIENT_NAME * sizeof(char) + BOX_NAME * sizeof(char)];
+    uint8_t op_code = CREATE_BOX_REQUEST; 
+    memcpy(server_request, &op_code, sizeof(uint8_t));
+    memset(server_request + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
+    memcpy(server_request + 1, client_pipe, strlen(client_pipe) * sizeof(char));
+    memset(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), '\0', BOX_NAME * sizeof(char));
+    memcpy(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), box, strlen(box) * sizeof(char));
+
+    /* Send request to server */
+	if (write_msg(server_pipe, server_request) == -1) {
+		return -1;
+	}
+
+    //parte de resposta no servidor
+
+    /* Receives answer */
+    char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
+    if (read(client_pipe, &response, sizeof(response)) == -1){
+        return -1;
+    }
+
+    // converts the return code inside the response to a int32_t character
+    int32_t ret;
+    memcpy(&ret, response + 1, sizeof(int32_t));
+
+    // Verifies what the answer was
+    if (ret == -1){
+        fprintf(stdout,"ERROR %.*s\n", 1024, response + 5); //error_message
+        return -1;
+    }
+    fprintf(stdout, "OK\n");
+    return 0;
+}
+
+int send_request_remove_box(char* server_pipe, char* client_pipe, char* box){
+    int ret;
+    char server_request[sizeof(uint8_t) + MAX_CLIENT_NAME * sizeof(char) + BOX_NAME * sizeof(char)];
+    uint8_t op_code = REMOVE_BOX_REQUEST; 
+    memcpy(server_request, &op_code, sizeof(uint8_t));
+    memset(server_request + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
+    memcpy(server_request + 1, client_pipe, strlen(client_pipe) * sizeof(char));
+    memset(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), '\0', BOX_NAME * sizeof(char));
+    memcpy(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), box, strlen(box) * sizeof(char));
+
+    /* Send request to server */
+	if (write_msg(server_pipe, server_request) == -1) {
+		return -1;
+	}
+
+    //parte de resposta no servidor
+
+    /* Receives answer */
+    char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
+    if (read(client_pipe, &response, sizeof(response)) == -1){
+        return -1;
+    }
+
+    // converts the return code inside the response to a int32_t character
+    int32_t ret;
+    memcpy(&ret, response + 1, sizeof(int32_t));
+
+    // Verifies what the answer was
+    if (ret == -1){
+        fprintf(stdout,"ERROR %.*s\n", 1024, response + 5);
+        return -1;
+    }
+    fprintf(stdout, "OK\n");
+    return 0;
+}
+
+int send_request_list_box(char* server_pipe, char* client_pipe){
+    int ret;
+    char server_request[sizeof(uint8_t) + MAX_CLIENT_NAME * sizeof(char)];
+    uint8_t op_code = LIST_BOXES_REQUEST; 
+    memcpy(server_request, &op_code, sizeof(uint8_t));
+    memset(server_request + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
+    memcpy(server_request + 1, client_pipe, strlen(client_pipe) * sizeof(char));
+
+    /* Send request to server */
+	if (write_msg(server_pipe, server_request) == -1) {
+		return -1;
+	}
+
+    //parte de resposta no servidor
+
+    /* Receives answer */
+    /*
+    char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
+    if (read(client_pipe, &response, sizeof(response)) == -1){
+        return -1;
+    }
+
+    // converts the return code inside the response to a int32_t character
+    int32_t ret;
+    memcpy(&ret, response + 1, sizeof(int32_t));
+
+    // Verifies what the answer was
+    if (ret == -1){
+        fprintf(stderr,"'%.*s'\n'", response + 5);
+        return -1;
+    }
+    return 0;
+    */
+}
+
+
 int main(int argc, char **argv) {
     if(argc < 4){
         print_usage();
+        return -1;
     }
 
     char *server_pipe = argv[1];
@@ -17,7 +155,43 @@ int main(int argc, char **argv) {
     char *type_command = argv[3];
     char *box_name = argv[4];
 
-    
+    // check if we can create or remove a message box with the commands given 
+    if ((strcmp(type_command, "create") || strcmp(type_command, "remove")) && argc == 4){
+        print_usage();
+        return -1;
+    }
+
+    // remove pipe if it does exist
+    if (unlink(pipe_name) != 0 && errno != ENOENT) {
+        fprintf(stderr, "[ERR]: unlink(%s) failed: %s\n", pipe_name,
+                strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    // create pipe and check if it exists
+    if (mkfifo(pipe_name, 0640) != 0 && errno != EEXIST) {
+        fprintf(stderr, "[ERR]: mkfifo failed: %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    /* Open server pipe */
+	if (open(server_pipe, O_WRONLY) == -1) {
+		return -1;
+	}
+
+    // check what command we need to do
+    if (strcmp(type_command, "create")){
+        send_request_create_box(server_pipe, pipe_name, box_name);
+    }
+
+    if (strcmp(type_command, "remove")){
+        send_request_remove_box(server_pipe, pipe_name, box_name);
+    }
+
+    if (strcmp(type_command, "list")){
+        send_request_list_box(server_pipe, pipe_name);
+    }
+
     
     WARN("unimplemented"); // TODO: implement
     return -1;
