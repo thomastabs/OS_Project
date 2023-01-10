@@ -1,4 +1,5 @@
 #include "logging.h"
+#include "../utils/common.h"
 #include "operations.h"
 #include <assert.h>
 #include <errno.h>
@@ -16,22 +17,26 @@
 #define MAX_BOX_NAME 32
 
 // Helper function to send pub request
-void send_pub_request(int tx, u_int8_t code, char *pub_pipename_arg, char *box_name_arg) {
-    if (strlen(pub_pipename_arg) <= MAX_PIPE_NAME)
-        pub_pipename_arg += '\0' * (MAX_PIPE_NAME - strlen(pub_pipename_arg));
+void send_pub_request(int server_pipe, char* client_pipe, char* box) {
+    char server_request[sizeof(uint8_t) + MAX_CLIENT_NAME * sizeof(char) + BOX_NAME * sizeof(char)];
+    uint8_t op_code = PUB_REQUEST; 
+    memcpy(server_request, &op_code, sizeof(uint8_t));
+    memset(server_request + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
+    memcpy(server_request + 1, client_pipe, strlen(client_pipe) * sizeof(char));
+    memset(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), '\0', BOX_NAME * sizeof(char));
+    memcpy(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), box, strlen(box) * sizeof(char));
 
-    if (strlen(box_name_arg) <= MAX_BOX_NAME)
-        box_name_arg += '\0' * (MAX_BOX_NAME - strlen(box_name_arg));
+    /* Send request to server */
+	if (write(server_pipe, &server_request, sizeof(server_request)) == -1) {
+		return -1;
+	}
 
-    char pub_request[4 + strlen(pub_pipename_arg) + strlen(box_name_arg)];
-
-    sprintf(pub_request, " %d | %s | %s ");
-    int w = write(tx, pub_request, strlen(pub_request));
-    if (w == -1){
-        fprintf(stderr, "Writing the request went wrong.\n");
-        exit(EXIT_FAILURE);
+    int response;
+    if (read(client_pipe, &response, sizeof(response)) == -1 || errno == EPIPE){
+        fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+        return -1;
     }
-
+    return response;
 }
 
 int main(int argc, char **argv) {
@@ -39,7 +44,7 @@ int main(int argc, char **argv) {
     char *pub_pipename = argv[2];
     char *box_name = argv[3];
 
-    if (argc > 4){
+    if (argc < 4){
         fprintf(stderr, "usage: pub <register_pipe_name> <box_name>\n");
         exit(EXIT_FAILURE);
     }
@@ -63,7 +68,7 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    send_pub_request(tx, 1, pub_pipename, box_name);
+    send_pub_request(register_pipename, pub_pipename, box_name);
 
     return 0;
 }

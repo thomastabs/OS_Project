@@ -19,24 +19,6 @@ static void print_usage() {
                     "   manager <register_pipe> <pipe_name> list\n");
 }
 
-// helper function to send messages
-// retries to send whatever was not sent in the begginning
-int write_msg(int tx, char *str) {
-    size_t len = strlen(str);
-    size_t written = 0;
-
-    while (written < len) {
-        ssize_t ret = write(tx, str + written, len - written);
-        if (ret < 0) {
-            fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
-            return -1;
-        }
-        written += (size_t) ret;
-    }
-    return 0;
-}
-
-
 int send_request_create_box(char* server_pipe, char* client_pipe, char* box){
     char server_request[sizeof(uint8_t) + MAX_CLIENT_NAME * sizeof(char) + BOX_NAME * sizeof(char)];
     uint8_t op_code = CREATE_BOX_REQUEST; 
@@ -47,7 +29,7 @@ int send_request_create_box(char* server_pipe, char* client_pipe, char* box){
     memcpy(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), box, strlen(box) * sizeof(char));
 
     /* Send request to server */
-	if (write_msg(server_pipe, server_request) == -1) {
+	if (write(server_pipe, &server_request, sizeof(server_request)) == -1) {
 		return -1;
 	}
 
@@ -73,7 +55,6 @@ int send_request_create_box(char* server_pipe, char* client_pipe, char* box){
 }
 
 int send_request_remove_box(char* server_pipe, char* client_pipe, char* box){
-    int ret;
     char server_request[sizeof(uint8_t) + MAX_CLIENT_NAME * sizeof(char) + BOX_NAME * sizeof(char)];
     uint8_t op_code = REMOVE_BOX_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
@@ -83,7 +64,7 @@ int send_request_remove_box(char* server_pipe, char* client_pipe, char* box){
     memcpy(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), box, strlen(box) * sizeof(char));
 
     /* Send request to server */
-	if (write_msg(server_pipe, server_request) == -1) {
+	if (write(server_pipe, &server_request, sizeof(server_request)) == -1) {
 		return -1;
 	}
 
@@ -109,7 +90,6 @@ int send_request_remove_box(char* server_pipe, char* client_pipe, char* box){
 }
 
 int send_request_list_box(char* server_pipe, char* client_pipe){
-    int ret;
     char server_request[sizeof(uint8_t) + MAX_CLIENT_NAME * sizeof(char)];
     uint8_t op_code = LIST_BOXES_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
@@ -117,30 +97,30 @@ int send_request_list_box(char* server_pipe, char* client_pipe){
     memcpy(server_request + 1, client_pipe, strlen(client_pipe) * sizeof(char));
 
     /* Send request to server */
-	if (write_msg(server_pipe, server_request) == -1) {
+	if (write(server_pipe, &server_request, sizeof(server_request)) == -1) {
 		return -1;
 	}
 
     //parte de resposta no servidor
 
     /* Receives answer */
-    /*
-    char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
+    
+    //como esta resposta será de uma certa forma uma variável, iremos meter um pico (1030 neste caso)
+    char response[MAX_REQUEST_SIZE]; 
     if (read(client_pipe, &response, sizeof(response)) == -1){
         return -1;
     }
 
-    // converts the return code inside the response to a int32_t character
-    int32_t ret;
-    memcpy(&ret, response + 1, sizeof(int32_t));
-
     // Verifies what the answer was
-    if (ret == -1){
-        fprintf(stderr,"'%.*s'\n'", response + 5);
+    if (strlen(response) == 2){
+        fprintf(stdout, "NO BOXES FOUND\n");
         return -1;
     }
+    for(size_t i = 0; i < strlen(response); i+=58){
+        fprintf(stdout, "%.32s %.8s %.8s %.8s\n", i+2, i+34 , i+42, i+50); // 58 being the size of each response of the request
+    } 
+
     return 0;
-    */
 }
 
 
