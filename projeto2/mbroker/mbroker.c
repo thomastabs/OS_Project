@@ -10,6 +10,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <producer-consumer.h>
 #include "../utils/common.h"
 #include "logging.h"
 #include "fs/operations.h"
@@ -28,7 +29,8 @@ typedef struct {
 } Session;
 
 typedef struct 
-{ 
+{   
+    bool is_free;
     char *box_name;
     uint8_t last;
     uint64_t box_size;
@@ -36,39 +38,137 @@ typedef struct
     uint64_t num_subscribers;
 } Box;
 
-uint32_t max_sessions;
+uint32_t max_sessions = 0;
 Session *container; // where we are going to keep the list of sessions so that it can be used in other functions
+Box boxes[BOX_NAME];
 pthread_cond_t wait_messages_cond;
+pc_queue_t *queue;
 
 
 void case_pub_request(Session* session){
+    int ret;
     char client_name[MAX_CLIENT_NAME];
     char box[BOX_NAME];
+    int pipe;
     memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
     memcpy(box, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
+    pipe = open(client_name, O_WRONLY);
     for (int i=0; i < max_sessions; i++){
         if(container[i].type == PUB){
-            
+            ret = -1;
+            if(write(pipe, &ret, sizeof(int)) == 0){
+                return;
+            }
         }
     }
-    
+    for (int i=0; i < BOX_NAME; i++){
+        if (strcmp(box, boxes[i].box_name) == 0){
+            session->type = PUB;
+            session->pipe = pipe;
+            session->pipe_name = client_name;
+            ret = 0;
+            if (write(pipe, &ret, sizeof(int)) == 0){
+                return;
+            }
+        }
+    }
+    ret = -1;
+    if(write(pipe, &ret, sizeof(int)) == 0){
+        return;
+    }
 }
 
-int init_threads(Session *sessions, int max_sessions){
-    for (int i = 0; i< max_sessions; i++){
+void case_sub_request(Session* session){
+    int ret;
+    char client_name[MAX_CLIENT_NAME];
+    char box[BOX_NAME];
+    int pipe;
+    memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
+    memcpy(box, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
+    pipe = open(client_name, O_WRONLY);
+    if (session->type == PUB){
+        for (int i=0; i < BOX_NAME; i++){
+            if (strcmp(box, boxes[i].box_name) == 0){
+                session->type = PUB;
+                session->pipe = pipe;
+                session->pipe_name = client_name;
+                ret = 0;
+                if(write(pipe, &ret, sizeof(int)) == 0){
+                    return;
+            }
+            }
+        }
+        ret = -1;
+        if(write(pipe, &ret, sizeof(int)) == 0){
+            return;
+        }
+        return;
+    }
+    ret = -1;
+    if(write(pipe, &ret, sizeof(int)) == 0){
+        return;
+    }
+    return;
+}
+
+void case_create_box(Session* session){
+    int ret;
+    int pipe;
+    char error_message[MESSAGE_SIZE];
+    char client_name[MAX_CLIENT_NAME];
+    char box_name[BOX_NAME];
+    uint8_t op_code = CREATE_BOX_ANSWER;
+    memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
+    memcpy(box_name, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
+    pipe = open(client_name, O_WRONLY);
+    for (int i=0; i < BOX_NAME; i++){
+        if (strcmp(box_name, boxes[i].box_name) == 0){
+            ret = -1;
+            if (write(pipe, &ret, sizeof(int)) == 0){
+                return;
+            }   
+        }
+    }
+    int box = tfs_open(box_name, TFS_O_CREAT);
+    for (int i=0; i < BOX_NAME; i++){
+        if(boxes[i].is_free){
+            boxes[i].box_name = box_name;
+            boxes[i].box_size = 0;
+            boxes[i].is_free = false;
+            boxes[i].last = 1;
+            boxes[i].num_publishers = 0;
+            boxes[i].num_subscribers = 0;
+            ret = 0;
+            if (write(pipe, &ret, sizeof(int)) == 0){
+                return;
+            }
+        }
+    ret = -1;
+    if (write(pipe, &ret, sizeof(int)) == 0){
+        return;
+    }
+}
+
+int init_threads(Session *sessions) {
+    for (uint32_t i=0; i < max_sessions; i++){
         sessions[i].is_free = true;
        	if (pthread_mutex_init(&sessions[i].lock, NULL) == -1) {
 			return -1;
 		}
+
+        if (pthread_cond_init(&sessions[i].flag, NULL) == -1){
+            return -1;
+        }
 
         if (pthread_create(&sessions[i].thread, NULL, thread_function, (void *) sessions+i) != 0) {
             fprintf(stderr, "[ERR]: couldn't create threads: %s\n", strerror(errno));
 			return -1;
 		}
     }
+    return 0;
 }
 
-void *thread_function(void *session, int max_sessions){
+void *thread_function(void *session){
     Session *actual_session = (Session*) session;
     char op_code;
 
@@ -83,40 +183,40 @@ void *thread_function(void *session, int max_sessions){
         switch (op_code) {
         case PUB_REQUEST:
             case_pub_request(actual_session);
-            break;
         case SUB_REQUEST:
             case_sub_request(actual_session);
-            break;
         case CREATE_BOX_REQUEST:
             case_create_box(actual_session);
-            break;
         case REMOVE_BOX_REQUEST:
             case_remove_box(actual_session);
-            break;
         case LIST_BOXES_REQUEST:
             case_list_box(actual_session);
-            break;
-        default: break;
         }
+        actual_session->is_free = true;
         pthread_mutex_unlock(&actual_session->lock);
     }
 }
 
 
 int main(int argc, char **argv) {    
-    char *pipe_name = argv[1];
-    max_sessions = atoi(argv[2]);
-    container =(Session *) malloc(max_sessions * sizeof(Session));
-
     if(argc < 2){
         fprintf(stderr, "usage: mbroker <pipename> <max_sessions>\n");
     }
 
+    char *pipe_name = argv[1];
+    max_sessions = (uint32_t) atoi(argv[2]);
+    container =(Session *) malloc(max_sessions * sizeof(Session));
+    queue = malloc(sizeof(pc_queue_t));
 
-    if(tfs_init(NULL) != -1){
+    if (tfs_init(NULL) == -1){
         fprintf(stderr, "Não foi possivel começar o servidor\n");
         return -1;
     }    
+
+    if (pcq_create(&queue, max_sessions) == -1){
+        fprintf(stderr, "Impossível fazer pedidos\n");
+        return -1;
+    }
 
     printf("[INFO]: Starting TecnicoFS server with pipe called %s with %d sessions\n", pipe_name, max_sessions);
 
@@ -140,7 +240,7 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    init_threads(container, max_sessions);
+    init_threads(container);
 
     while(true){
 
