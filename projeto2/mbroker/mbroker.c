@@ -41,6 +41,7 @@ typedef struct
 uint32_t max_sessions = 0;
 Session *container; // where we are going to keep the list of sessions so that it can be used in other functions
 Box boxes[BOX_NAME];
+int box_count;
 pthread_cond_t wait_messages_cond;
 pc_queue_t *queue;
 
@@ -57,6 +58,7 @@ void case_pub_request(Session* session){
         if(container[i].type == PUB){
             ret = -1;
             if(write(pipe, &ret, sizeof(int)) == 0){
+                close(pipe);
                 return;
             }
         }
@@ -68,12 +70,14 @@ void case_pub_request(Session* session){
             session->pipe_name = client_name;
             ret = 0;
             if (write(pipe, &ret, sizeof(int)) == 0){
+                close(pipe);
                 return;
             }
         }
     }
     ret = -1;
     if(write(pipe, &ret, sizeof(int)) == 0){
+        close(pipe);
         return;
     }
 }
@@ -94,18 +98,21 @@ void case_sub_request(Session* session){
                 session->pipe_name = client_name;
                 ret = 0;
                 if(write(pipe, &ret, sizeof(int)) == 0){
+                    close(pipe);
                     return;
-            }
+                }
             }
         }
         ret = -1;
         if(write(pipe, &ret, sizeof(int)) == 0){
+            close(pipe);
             return;
         }
         return;
     }
     ret = -1;
     if(write(pipe, &ret, sizeof(int)) == 0){
+        close(pipe);
         return;
     }
     return;
@@ -125,6 +132,7 @@ void case_create_box(Session* session){
         if (strcmp(box_name, boxes[i].box_name) == 0){
             ret = -1;
             if (write(pipe, &ret, sizeof(int)) == 0){
+                close(pipe);
                 return;
             }   
         }
@@ -138,16 +146,83 @@ void case_create_box(Session* session){
             boxes[i].last = 1;
             boxes[i].num_publishers = 0;
             boxes[i].num_subscribers = 0;
+            box_count++;
             ret = 0;
             if (write(pipe, &ret, sizeof(int)) == 0){
+                close(pipe);
                 return;
             }
         }
     ret = -1;
     if (write(pipe, &ret, sizeof(int)) == 0){
+        close(pipe);
         return;
+        }
     }
 }
+
+void case_remove_box(Session* session){
+    int ret;
+    int pipe;
+    char error_message[MESSAGE_SIZE];
+    char client_name[MAX_CLIENT_NAME];
+    char box_name[BOX_NAME];
+    uint8_t op_code = REMOVE_BOX_ANSWER;
+    memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
+    memcpy(box_name, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
+    pipe = open(client_name, O_WRONLY);
+    for (int i=0; i < BOX_NAME; i++){
+        if (strcmp(box_name, boxes[i].box_name) != 0){
+            ret = -1;
+            if (write(pipe, &ret, sizeof(int)) == 0){
+                close(pipe);
+                return;
+            }   
+        }
+    }
+    int box = tfs_unlink(box_name);
+    for (int i=0; i < BOX_NAME; i++){
+        if(strcmp(boxes[i].box_name, box_name)){
+            strcpy(boxes[i].box_name, box_name);
+            boxes[i].box_size = 0;
+            boxes[i].is_free = true;
+            boxes[i].last = 0;
+            boxes[i].num_publishers = 0;
+            boxes[i].num_subscribers = 0;
+            box_count--;
+            ret = 0;
+            if (write(pipe, &ret, sizeof(int)) == 0){
+                close(pipe);
+                return;
+            }
+        }
+    ret = -1;
+    if (write(pipe, &ret, sizeof(int)) == 0){
+        close(pipe);
+        return;
+        }
+    }
+}
+
+void case_list_box(Session* session){
+    int ret;
+    int pipe;
+    char client_name[MAX_CLIENT_NAME];
+    uint8_t op_code = LIST_BOXES_ANSWER;
+    memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
+    pipe = open(client_name, O_WRONLY);
+
+    if(box_count = 0){
+        //lmao
+    }
+
+    qsort(boxes, box_count, sizeof(Box), myCompare);
+    for(int i=0; i < box_count; i++){
+        // right answer
+    }
+}
+
+
 
 int init_threads(Session *sessions) {
     for (uint32_t i=0; i < max_sessions; i++){
@@ -180,6 +255,8 @@ void *thread_function(void *session){
         actual_session->is_free = false;
         memcpy(op_code, &actual_session->buffer, sizeof(char));
 
+        // mudar isto para tbm ter os ecrever e ler mensagem
+        // + fazer as respostas
         switch (op_code) {
         case PUB_REQUEST:
             case_pub_request(actual_session);
@@ -247,9 +324,17 @@ int main(int argc, char **argv) {
         /* Read request */
         char buffer[MAX_REQUEST_SIZE];
         char op_code;
-        if (read(server_pipe, &op_code, sizeof(char)) == -1) {
+        if (read(container, &op_code, sizeof(char)) == -1) {
             return -1;
         }
+
+        /*
+        1- ler conteúdos;
+        2- associar esses conteúdos a uma sessão que esteja livre;
+        3- sinalizar a sessão que vai ficar ocupada (acontece sempre, reasons innit);
+        4- adiciona à queue;
+        */
+
 
         
 
@@ -260,4 +345,10 @@ int main(int argc, char **argv) {
     close(server_pipe);
     tfs_unlink(pipe_name);
     return -1;
+}
+
+/* Auxiliary functions for sorting the boxes*/
+static int myCompare(const void* a, const void* b)
+{
+  return strcmp(((Box *)a)->box_name, ((Box *)b)->box_name);
 }
