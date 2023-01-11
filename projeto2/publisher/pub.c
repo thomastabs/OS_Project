@@ -18,7 +18,7 @@
 #define MAX_MSG_SIZE 1024   
 
 // Helper function to send pub request
-void send_pub_request(int server_pipe, char* client_pipe, char* box) {
+int send_pub_request(int server_pipe, char* client_pipe, char* box) {
     char server_request[sizeof(uint8_t) + MAX_CLIENT_NAME * sizeof(char) + BOX_NAME * sizeof(char)];
     uint8_t op_code = PUB_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
@@ -40,7 +40,7 @@ void send_pub_request(int server_pipe, char* client_pipe, char* box) {
     return response;
 }
 
-void send_pub_msg(int session_pipe, char *msg){
+int send_pub_msg(int session_pipe, char *msg){
     char pub_msg[sizeof(uint8_t) +  MAX_MSG_SIZE * sizeof(char)];
     uint8_t op_code = SEND_MESSAGE;
     memcpy(pub_msg, &op_code, sizeof(uint8_t));
@@ -83,38 +83,46 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
     
-    send_pub_request(register_pipename, pub_pipename, box_name);
     
-    //se for aceite faz o resto
-
-    // Open pipe for writing
-    int session_pipe = open(pub_pipename, O_WRONLY);
-    if (session_pipe == -1) {
-        fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
+    if (send_pub_request(register_pipename, pub_pipename, box_name) == -1){
+        fprintf(stderr, "Request Denied. %s\n", strerror(errno));
         exit(EXIT_FAILURE);
+    } 
+    else {
+        // Open pipe for writing
+        int session_pipe = open(pub_pipename, O_WRONLY);
+        if (session_pipe == -1) {
+            fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+
+        char input[MAX_MSG_SIZE];
+	    memset(input, 0, MAX_MSG_SIZE);
+
+        while (fgets(input, MAX_MSG_SIZE, stdin)) {
+            /* if line too long, truncate and swallow the rest of the line */
+            if (strlen(input) >= MAX_MSG_SIZE - 1) {
+                input[MAX_MSG_SIZE - 1] = '\0';
+                while (getchar() != '\n' && !feof(stdin))
+                    ;
+            }
+
+            input[strcspn(input, "\n")] = 0;
+            if (send_pub_msg(session_pipe, input) == -1){
+                fprintf(stderr, "Writing went wrong. %s\n");
+                close(session_pipe);
+                unlink(pub_pipename);
+                exit(EXIT_FAILURE);
+            }
+            //depois de ser clicado enter, um input é preenchido e 
+            //assim vai para a proxima linha 
+	    }
+
+        // when the EOF is pressed with the Crtl D, then the session pipe will be closed
+        fprintf(stderr, "[INFO]: closing session pipe\n");
+        close(session_pipe); 
+        unlink(pub_pipename);
+
+        return 0;
     }
-
-    char input[MAX_MSG_SIZE];
-	memset(input, 0, MAX_MSG_SIZE);
-	int help = 0;
-
-	while (fgets(input, MAX_MSG_SIZE, stdin)) {;
-		/* if line too long, truncate and swallow the rest of the line */
-		if (strlen(input) >= MAX_MSG_SIZE - 1) {
-			input[MAX_MSG_SIZE - 1] = '\0';
-			while (getchar() != '\n' && !feof(stdin))
-				;
-		}
-
-		input[strcspn(input, "\n")] = 0;
-        send_pub_msg(session_pipe, input);
-        //depois de ser clicado enter, um input é preenchido e 
-        //assim vai para a proxima linha 
-	}
-
-    // when the EOF is pressed with the Crtl D, then the session pipe will be closed
-    fprintf(stderr, "[INFO]: closing session pipe\n");
-    close(session_pipe);
-
-    return 0;
 }
