@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
     }
 
     // Open session pipe for writing
-    // This waits for someone to open it for reading
+    // This waits for someone to open it olafor reading
     int server_pipe = open(server_pipe, O_WRONLY);
     if (server_pipe == -1) {
         fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
