@@ -213,8 +213,6 @@ void case_list_box(Session* session){
     pipe = open(client_name, O_WRONLY);
 
     if(box_count = 0){
-        // [ code = 8 (uint8_t) ] | [ last (uint8_t) ] | [ box_name (char[32]) ] | [ box_size (uint64_t) ] | [ n_publishers (uint64_t) ] | [ n_subscribers (uint64_t) ]
-        // Se não existirem caixas, a resposta é uma mensagem com last a 1 e box_name toda preenchida com \0.
         char response[sizeof(uint8_t) + sizeof(uint8_t) + BOX_NAME * sizeof(char)];
         memcpy(response, &op_code, sizeof(uint8_t));
         memcpy(response + 1, 1, 1 * sizeof(uint8_t));
@@ -224,11 +222,25 @@ void case_list_box(Session* session){
 		    return -1;
 	    }
     }
-    
     else {
-        qsort(boxes, box_count, sizeof(Box), myCompare);
+        qsort(boxes, box_count, sizeof(Box), myCompare); //sort the boxes
+        char response[sizeof(uint8_t) + sizeof(uint8_t) + BOX_NAME * sizeof(char) 
+                + sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint64_t)];
+        
         for(int i=0; i < box_count; i++){
-            // right answer
+            memcpy(response, &op_code, sizeof(uint8_t));
+            memcpy(response + 1, boxes[i].last, 1 * sizeof(uint8_t));
+            memset(response + 2, '\0', BOX_NAME * sizeof(char));
+            memcpy(response + 2, boxes[i].box_name, strlen(boxes[i].box_name) * sizeof(char));
+            memcpy(response + 2 + BOX_NAME, boxes[i].box_size, sizeof(uint64_t));
+            memcpy(response + 2 + BOX_NAME + sizeof(uint64_t), boxes[i].num_publishers, sizeof(uint64_t));
+            memcpy(response + 2 + BOX_NAME + sizeof(uint64_t) + sizeof(uint64_t), boxes[i].num_subscribers, sizeof(uint64_t));
+
+            if (write(pipe, &response, sizeof(response)) == -1) {
+		        return -1;
+	        }
+
+            //memset(response, 0, strlen(response));
         }
     }
 }
