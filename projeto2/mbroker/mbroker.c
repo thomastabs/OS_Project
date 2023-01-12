@@ -90,10 +90,10 @@ void case_sub_request(Session* session){
     memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
     memcpy(box, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
     pipe = open(client_name, O_WRONLY);
-    if (session->type == PUB){
+    if (session->type != PUB || session->type != SUB){
         for (int i=0; i < BOX_NAME; i++){
             if (strcmp(box, boxes[i].box_name) == 0){
-                session->type = PUB;
+                session->type = SUB;
                 session->pipe = pipe;
                 session->pipe_name = client_name;
                 ret = 0;
@@ -103,12 +103,6 @@ void case_sub_request(Session* session){
                 }
             }
         }
-        ret = -1;
-        if(write(pipe, &ret, sizeof(int)) == 0){
-            close(pipe);
-            return;
-        }
-        return;
     }
     ret = -1;
     if(write(pipe, &ret, sizeof(int)) == 0){
@@ -345,13 +339,66 @@ int main(int argc, char **argv) {
     init_threads(container);
 
     while(true){
-
-
+        char content[MESSAGE_SIZE];
+        char content2[BOX_NAME];
         uint8_t op_code;
         Session *current_session;
         if (read(server_pipe, &op_code, sizeof(uint8_t)) == -1) {
             return -1;
         }
+
+        if(op_code == SEND_MESSAGE || op_code == RECEIVE_MESSAGE){
+            for(int i = 0; i < max_sessions; i++){
+                if(container[i].type == PUB){
+                    pthread_mutex_lock(&current_session->lock);
+                    current_session = &container[i];
+                    memcpy(current_session->buffer, &op_code, sizeof(char));
+                    read_buffer(server_pipe, current_session->buffer + 1, MAX_CLIENT_NAME);
+                    memcpy(container, current_session->buffer + 1, MAX_CLIENT_NAME);
+                    current_session->pipe_name = content;
+                    break;
+                }
+            }
+            read(server_pipe, &content, MESSAGE_SIZE * sizeof(char));
+        }
+
+        if(op_code = LIST_BOXES_REQUEST){
+            for(int i = 0; i < max_sessions; i++){
+                if(container[i].is_free){
+                    pthread_mutex_lock(&current_session->lock);
+                    current_session = &container[i];
+                    memcpy(current_session->buffer, &op_code, sizeof(char));
+                    read_buffer(server_pipe, current_session->buffer + 1, MAX_CLIENT_NAME);
+                    memcpy(container, current_session->buffer + 1, MAX_CLIENT_NAME);
+                    current_session->pipe_name = content;
+                    break;
+                }
+            }
+            pcq_enqueue(&queue, current_session->buffer);
+
+            pthread_cond_signal(&current_session->flag);
+
+            pthread_mutex_unlock(&current_session->lock);
+
+        }
+        else{
+            for(int i = 0; i < max_sessions; i++){
+                if(container[i].is_free){
+                    pthread_mutex_lock(&current_session->lock);
+                    current_session = &container[i];
+                    read_buffer(server_pipe, current_session->buffer  + 1, MAX_CLIENT_NAME + BOX_NAME);
+                    memcpy(container, current_session->buffer + 1, MAX_CLIENT_NAME);
+                    current_session->pipe_name = content;
+                    break;
+                }
+            }
+            pcq_enqueue(&queue, current_session->buffer);
+
+            pthread_cond_signal(&current_session->flag);
+
+            pthread_mutex_unlock(&current_session->lock);
+        }
+        (read(server_pipe + 1, &content, ))
 
         for(int i = 0; i < max_sessions; i++){
             if(container[i].is_free){
@@ -359,16 +406,13 @@ int main(int argc, char **argv) {
             }
         }
 
-        memcpy(current_session->buffer, &op_code, sizeof(char));
-        memcpy(current_session->buffer + 1, , sizeof(int));
-
         /*
         1- ler conteúdos;
         2- associar esses conteúdos a uma sessão que esteja livre;
         3- sinalizar a sessão que vai ficar ocupada (acontece sempre, reasons innit);
         4- adiciona à queue;
         */
-       
+
 
 
         
@@ -386,4 +430,23 @@ int main(int argc, char **argv) {
 static int myCompare(const void* a, const void* b)
 {
   return strcmp(((Box *)a)->box_name, ((Box *)b)->box_name);
+}
+
+
+/*
+ * Reads (and guarantees that it reads correctly) a given number of bytes
+ * from a pipe to a given buffer
+ */
+int read_buffer(int rx, char *buf, size_t to_read) {
+    ssize_t ret;
+    size_t read_so_far = 0;
+    while (read_so_far < to_read) {
+        ret = read(rx, buf + read_so_far, to_read - read_so_far);
+        if (ret == -1) {
+            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+            return -1;
+        }
+        read_so_far += (size_t) ret;
+    }
+    return 0;
 }
