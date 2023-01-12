@@ -136,7 +136,8 @@ int main(int argc, char **argv) {
         }
     }
     else {
-        fprintf(stderr, "Request Denied. %s\n", strerror(errno));
+        fprintf(stderr, "Request Denied. Deleting session pipe.");
+        unlink(sub_pipename);
         exit(EXIT_FAILURE);
     }
 }

@@ -41,7 +41,7 @@ typedef struct
 uint32_t max_sessions = 0;
 Session *container; // where we are going to keep the list of sessions so that it can be used in other functions
 Box boxes[BOX_NAME];
-int box_count;
+int box_count = 0;
 pthread_cond_t wait_messages_cond;
 pc_queue_t *queue;
 
@@ -215,12 +215,35 @@ void case_list_box(Session* session){
     pipe = open(client_name, O_WRONLY);
 
     if(box_count = 0){
-        //lmao
-    }
+        char response[sizeof(uint8_t) + sizeof(uint8_t) + BOX_NAME * sizeof(char)];
+        memcpy(response, &op_code, sizeof(uint8_t));
+        memcpy(response + 1, 1, 1 * sizeof(uint8_t));
+        memset(response + 2, '\0', BOX_NAME * sizeof(char));
 
-    qsort(boxes, box_count, sizeof(Box), myCompare);
-    for(int i=0; i < box_count; i++){
-        // right answer
+        if (write(pipe, &response, sizeof(response)) == -1) {
+		    return -1;
+	    }
+    }
+    else {
+        qsort(boxes, box_count, sizeof(Box), myCompare); //sort the boxes
+        char response[sizeof(uint8_t) + sizeof(uint8_t) + BOX_NAME * sizeof(char) 
+                + sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint64_t)];
+        
+        for(int i=0; i < box_count; i++){
+            memcpy(response, &op_code, sizeof(uint8_t));
+            memcpy(response + 1, boxes[i].last, 1 * sizeof(uint8_t));
+            memset(response + 2, '\0', BOX_NAME * sizeof(char));
+            memcpy(response + 2, boxes[i].box_name, strlen(boxes[i].box_name) * sizeof(char));
+            memcpy(response + 2 + BOX_NAME, boxes[i].box_size, sizeof(uint64_t));
+            memcpy(response + 2 + BOX_NAME + sizeof(uint64_t), boxes[i].num_publishers, sizeof(uint64_t));
+            memcpy(response + 2 + BOX_NAME + sizeof(uint64_t) + sizeof(uint64_t), boxes[i].num_subscribers, sizeof(uint64_t));
+
+            if (write(pipe, &response, sizeof(response)) == -1) {
+		        return -1;
+	        }
+
+            //memset(response, 0, strlen(response));
+        }
     }
 }
 
