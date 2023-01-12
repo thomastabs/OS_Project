@@ -40,12 +40,14 @@ int send_pub_request(int server_pipe, char* client_pipe, char* box) {
     return response;
 }
 
-int send_pub_msg(int session_pipe, char *msg){
-    char pub_msg[sizeof(uint8_t) +  MAX_MSG_SIZE * sizeof(char)];
+int send_pub_msg(int session_pipe, char pub_pipename, char *msg){
+    char pub_msg[sizeof(uint8_t) +  MAX_MSG_SIZE * sizeof(char) + MAX_PIPE_NAME * sizeof(char)];
     uint8_t op_code = SEND_MESSAGE;
     memcpy(pub_msg, &op_code, sizeof(uint8_t));
     memset(pub_msg + 1, '\0', MAX_MSG_SIZE * sizeof(char));
     memcpy(pub_msg + 1, msg, strlen(msg) * sizeof(char));
+    memset(pub_msg + 1 + MAX_MSG_SIZE, '\0', MAX_PIPE_NAME * sizeof(char));
+    memcpy(pub_msg + 1 + MAX_MSG_SIZE, pub_pipename, strlen(pub_pipename) * sizeof(char));
 
     // write to the the client session pipe
     if (write(session_pipe, pub_msg, strlen(pub_msg)) == -1){
@@ -108,7 +110,7 @@ int main(int argc, char **argv) {
             }
 
             input[strcspn(input, "\n")] = 0;
-            if (send_pub_msg(session_pipe, input) == -1){
+            if (send_pub_msg(session_pipe, pub_pipename, input) == -1){
                 fprintf(stderr, "Writing went wrong. %s\n");
                 close(session_pipe);
                 unlink(pub_pipename);
