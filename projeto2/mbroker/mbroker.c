@@ -113,51 +113,76 @@ void case_sub_request(Session* session){
 }
 
 void case_create_box(Session* session){
-    int ret;
-    int pipe;
+    int ret = 0;
+    int client_pipe;
     char error_message[MESSAGE_SIZE];
     char client_name[MAX_CLIENT_NAME];
     char box_name[BOX_NAME];
     uint8_t op_code = CREATE_BOX_ANSWER;
     memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
     memcpy(box_name, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
-    pipe = open(client_name, O_WRONLY);
+    client_pipe = open(client_name, O_WRONLY);
     for (int i=0; i < BOX_NAME; i++){
+        // lets check if there is any box with the same name 
         if (strcmp(box_name, boxes[i].box_name) == 0){
-            ret = -1;
-            if (write(pipe, &ret, sizeof(int)) == 0){
-                close(pipe);
-                return;
-            }   
+            ret = -1; 
+            strcpy(error_message, "There is already a box with this name.\n");
+
+            char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
+            memcpy(response, &op_code, sizeof(uint8_t));
+            memcpy(response + 1, &ret, sizeof(int32_t));
+            memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
+            memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
+            
+            write(client_pipe, response, strlen(response));
+            return;
         }
     }
     int box = tfs_open(box_name, TFS_O_CREAT);
-    for (int i=0; i < BOX_NAME; i++){
-        if(boxes[i].is_free){
-            boxes[i].box_name = box_name;
-            boxes[i].box_size = 1024;
-            boxes[i].is_free = false;
-            boxes[i].last = 1;
-            boxes[i].num_publishers = 0;
-            boxes[i].num_subscribers = 0;
-            boxes[i-1].last = 0;
-            box_count++;
-            ret = 0;
-            if (write(pipe, &ret, sizeof(int)) == 0){
-                close(pipe);
-                return;
+    if (box == -1){
+        ret = -1;
+        strcpy(error_message, "Couldnt create a box.\n");
+    }
+    else {
+        for (int i=0; i < BOX_NAME; i++){
+            if(boxes[i].is_free){
+                boxes[i].box_name = box_name;
+                boxes[i].box_size = 1024;
+                boxes[i].is_free = false;
+                boxes[i].last = 1;
+                boxes[i].num_publishers = 0;
+                boxes[i].num_subscribers = 0;
+                boxes[i-1].last = 0;
+                box_count++;
+                ret = 0;
+                break;
             }
         }
-    ret = -1;
-    if (write(pipe, &ret, sizeof(int)) == 0){
-        close(pipe);
-        return;
-        }
+    }
+
+    if (ret == -1){
+        char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
+        memcpy(response, &op_code, sizeof(uint8_t));
+        memcpy(response + 1, &ret, sizeof(int32_t));
+        memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
+        memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
+        
+        write(client_pipe, response, strlen(response));
+    }
+    else {   
+        char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
+        memcpy(response, &op_code, sizeof(uint8_t));
+        memcpy(response + 1, &ret, sizeof(int32_t));
+        memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
+        memcpy(response + 2, "\0", strlen(error_message) * sizeof(char));
+        // preencer o campo do error message com \0
+
+        write(client_pipe, response, strlen(response));
     }
 }
 
 void case_remove_box(Session* session){
-    int ret;
+    int ret = 0;
     int pipe;
     char error_message[MESSAGE_SIZE];
     char client_name[MAX_CLIENT_NAME];
@@ -167,36 +192,62 @@ void case_remove_box(Session* session){
     memcpy(box_name, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
     pipe = open(client_name, O_WRONLY);
     for (int i=0; i < BOX_NAME; i++){
+        // lets check if we can find the box within the box list
         if (strcmp(box_name, boxes[i].box_name) != 0){
             ret = -1;
-            if (write(pipe, &ret, sizeof(int)) == 0){
-                close(pipe);
-                return;
-            }   
+            strcpy(error_message, "There isn't a box with the specified box name.\n");
+
+            char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
+            memcpy(response, &op_code, sizeof(uint8_t));
+            memset(response + 1, &ret, sizeof(int32_t));
+            memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
+            memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
+            
+            write(pipe, response, strlen(response));
+            return;
         }
     }
+
     int box = tfs_unlink(box_name);
-    for (int i=0; i < BOX_NAME; i++){
-        if(strcmp(boxes[i].box_name, box_name)){
-            strcpy(boxes[i].box_name, box_name);
-            boxes[i].box_size = 0;
-            boxes[i].is_free = true;
-            boxes[i].last = 0;
-            boxes[i].num_publishers = 0;
-            boxes[i].num_subscribers = 0;
-            boxes[i-1].last = 1;
-            box_count--;
-            ret = 0;
-            if (write(pipe, &ret, sizeof(int)) == 0){
-                close(pipe);
-                return;
+    if (box == -1){
+        ret = -1;
+        strcpy(error_message, "Couldnt delete the specified box.\n");
+    }
+    else {
+        for (int i=0; i < BOX_NAME; i++){
+            if(strcmp(boxes[i].box_name, box_name)){
+                strcpy(boxes[i].box_name, box_name);
+                boxes[i].box_size = 0;
+                boxes[i].is_free = true;
+                boxes[i].last = 0;
+                boxes[i].num_publishers = 0;
+                boxes[i].num_subscribers = 0;
+                boxes[i-1].last = 1;
+                box_count--;
+                ret = 0;
+                
             }
         }
-    ret = -1;
-    if (write(pipe, &ret, sizeof(int)) == 0){
-        close(pipe);
-        return;
-        }
+    }
+
+    if (ret == -1){
+        char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
+        memcpy(response, &op_code, sizeof(uint8_t));
+        memcpy(response + 1, &ret, sizeof(int32_t));
+        memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
+        memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
+        
+        write(pipe, response, strlen(response));
+    }
+    else {   
+        char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
+        memcpy(response, &op_code, sizeof(uint8_t));
+        memcpy(response + 1, &ret, sizeof(int32_t));
+        memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
+        memcpy(response + 2, "\0", strlen(error_message) * sizeof(char));
+        // preencer o campo do error message com \0
+
+        write(pipe, response, strlen(response));
     }
 }
 
@@ -341,15 +392,16 @@ int main(int argc, char **argv) {
     while(true){
         char content[MESSAGE_SIZE];
         char content2[BOX_NAME];
+        char content3[MAX_CLIENT_NAME];
         uint8_t op_code;
         Session *current_session;
         if (read(server_pipe, &op_code, sizeof(uint8_t)) == -1) {
             return -1;
         }
 
-        if(op_code == SEND_MESSAGE || op_code == RECEIVE_MESSAGE){
-            for(int i = 0; i < max_sessions; i++){
-                if(container[i].type == PUB){
+        if (op_code == SEND_MESSAGE || op_code == RECEIVE_MESSAGE){
+            for (int i = 0; i < max_sessions; i++){
+                if (container[i].type == PUB){
                     pthread_mutex_lock(&current_session->lock);
                     current_session = &container[i];
                     memcpy(current_session->buffer, &op_code, sizeof(char));
@@ -360,9 +412,12 @@ int main(int argc, char **argv) {
                 }
             }
             read(server_pipe, &content, MESSAGE_SIZE * sizeof(char));
+            read(server_pipe, &content3, MAX_CLIENT_NAME * sizeof(char));
+            //...
+
         }
 
-        if(op_code = LIST_BOXES_REQUEST){
+        if (op_code = LIST_BOXES_REQUEST){
             for(int i = 0; i < max_sessions; i++){
                 if(container[i].is_free){
                     pthread_mutex_lock(&current_session->lock);
@@ -382,7 +437,7 @@ int main(int argc, char **argv) {
 
         }
         else{
-            for(int i = 0; i < max_sessions; i++){
+            for (int i = 0; i < max_sessions; i++){
                 if(container[i].is_free){
                     pthread_mutex_lock(&current_session->lock);
                     current_session = &container[i];
@@ -400,7 +455,7 @@ int main(int argc, char **argv) {
         }
         (read(server_pipe + 1, &content, ))
 
-        for(int i = 0; i < max_sessions; i++){
+        for (int i = 0; i < max_sessions; i++){
             if(container[i].is_free){
                 current_session = &container[i];
             }
