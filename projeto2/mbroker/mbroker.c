@@ -141,11 +141,12 @@ void case_create_box(Session* session){
     for (int i=0; i < BOX_NAME; i++){
         if(boxes[i].is_free){
             boxes[i].box_name = box_name;
-            boxes[i].box_size = 0;
+            boxes[i].box_size = 1024;
             boxes[i].is_free = false;
             boxes[i].last = 1;
             boxes[i].num_publishers = 0;
             boxes[i].num_subscribers = 0;
+            boxes[i-1].last = 0;
             box_count++;
             ret = 0;
             if (write(pipe, &ret, sizeof(int)) == 0){
@@ -189,6 +190,7 @@ void case_remove_box(Session* session){
             boxes[i].last = 0;
             boxes[i].num_publishers = 0;
             boxes[i].num_subscribers = 0;
+            boxes[i-1].last = 1;
             box_count--;
             ret = 0;
             if (write(pipe, &ret, sizeof(int)) == 0){
@@ -321,12 +323,21 @@ int main(int argc, char **argv) {
 
     while(true){
 
-        /* Read request */
-        char buffer[MAX_REQUEST_SIZE];
-        char op_code;
-        if (read(container, &op_code, sizeof(char)) == -1) {
+
+        uint8_t op_code;
+        Session *current_session;
+        if (read(server_pipe, &op_code, sizeof(uint8_t)) == -1) {
             return -1;
         }
+
+        for(int i = 0; i < max_sessions; i++){
+            if(container[i].is_free){
+                current_session = &container[i];
+            }
+        }
+
+        memcpy(current_session->buffer, &op_code, sizeof(char));
+        memcpy(current_session->buffer + 1, , sizeof(int));
 
         /*
         1- ler conteúdos;
@@ -334,6 +345,7 @@ int main(int argc, char **argv) {
         3- sinalizar a sessão que vai ficar ocupada (acontece sempre, reasons innit);
         4- adiciona à queue;
         */
+       
 
 
         
