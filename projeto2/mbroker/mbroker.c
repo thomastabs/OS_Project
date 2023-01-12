@@ -41,7 +41,7 @@ typedef struct
 uint32_t max_sessions = 0;
 Session *container; // where we are going to keep the list of sessions so that it can be used in other functions
 Box boxes[BOX_NAME];
-int box_count;
+int box_count = 0;
 pthread_cond_t wait_messages_cond;
 pc_queue_t *queue;
 
@@ -213,12 +213,23 @@ void case_list_box(Session* session){
     pipe = open(client_name, O_WRONLY);
 
     if(box_count = 0){
-        //lmao
-    }
+        // [ code = 8 (uint8_t) ] | [ last (uint8_t) ] | [ box_name (char[32]) ] | [ box_size (uint64_t) ] | [ n_publishers (uint64_t) ] | [ n_subscribers (uint64_t) ]
+        // Se não existirem caixas, a resposta é uma mensagem com last a 1 e box_name toda preenchida com \0.
+        char response[sizeof(uint8_t) + sizeof(uint8_t) + BOX_NAME * sizeof(char)];
+        memcpy(response, &op_code, sizeof(uint8_t));
+        memcpy(response + 1, 1, 1 * sizeof(uint8_t));
+        memset(response + 2, '\0', BOX_NAME * sizeof(char));
 
-    qsort(boxes, box_count, sizeof(Box), myCompare);
-    for(int i=0; i < box_count; i++){
-        // right answer
+        if (write(pipe, &response, sizeof(response)) == -1) {
+		    return -1;
+	    }
+    }
+    
+    else {
+        qsort(boxes, box_count, sizeof(Box), myCompare);
+        for(int i=0; i < box_count; i++){
+            // right answer
+        }
     }
 }
 
