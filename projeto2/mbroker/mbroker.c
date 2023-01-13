@@ -158,6 +158,7 @@ void case_create_box(Session* session){
                 boxes[i].num_subscribers = 0;
                 boxes[i-1].last = 0;
                 box_count++;
+                tfs_close(box);
                 ret = 0;
                 break;
             }
@@ -324,18 +325,18 @@ int init_threads(Session *sessions) {
 
 void *thread_function(void *session){
     Session *actual_session = (Session*) session;
-    char op_code;
+    uint8_t op_code;
 
     while(true){
         pthread_mutex_lock(&actual_session->lock);
         while (actual_session->is_free) {
             pthread_cond_wait(&actual_session->flag, &actual_session->lock);
         }
+        void* request = pcq_dequeue(&queue);
+        memcpy(&actual_session->buffer, request, MAX_REQUEST_SIZE);
         actual_session->is_free = false;
-        memcpy(op_code, &actual_session->buffer, sizeof(char));
+        memcpy(op_code, &actual_session->buffer, sizeof(uint8_t));
 
-        // mudar isto para tbm ter os ecrever e ler mensagem
-        // + fazer as respostas
         switch (op_code) {
         case PUB_REQUEST:
             case_pub_request(actual_session);
@@ -347,6 +348,10 @@ void *thread_function(void *session){
             case_remove_box(actual_session);
         case LIST_BOXES_REQUEST:
             case_list_box(actual_session);
+        case SEND_MESSAGE:
+            send_message(actual_session);
+        case RECEIVE_MESSAGE:
+            receive_message(actual_session);
         }
         actual_session->is_free = true;
         pthread_mutex_unlock(&actual_session->lock);
@@ -414,7 +419,7 @@ int main(int argc, char **argv) {
                 if (container[i].type == PUB){
                     pthread_mutex_lock(&current_session->lock);
                     current_session = &container[i];
-                    memcpy(buffer, &op_code, sizeof(char));
+                    memcpy(buffer, &op_code, sizeof(uint8_t));
                     read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME + MESSAGE_SIZE);
                     memcpy(content3, buffer + 1 + MESSAGE_SIZE, MAX_CLIENT_NAME);
                     memset(buffer + 1 + MESSAGE_SIZE, '\0', MAX_CLIENT_NAME * sizeof(char));
@@ -433,11 +438,11 @@ int main(int argc, char **argv) {
                 if (container[i].type == SUB){
                     pthread_mutex_lock(&current_session->lock);
                     current_session = &container[i];
-                    memcpy(buffer, &op_code, sizeof(char));
-                    read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME + MESSAGE_SIZE);
-                    memcpy(content3, buffer + 1 + MESSAGE_SIZE, MAX_CLIENT_NAME);
-                    memset(buffer + 1 + MESSAGE_SIZE, '\0', MAX_CLIENT_NAME * sizeof(char));
-                    if(strcmp(/*conteudo de caixa*/, current_session->box_name) == 0){
+                    memcpy(buffer, &op_code, sizeof(uint8_t));
+                    read_buffer(server_pipe, buffer + 1, BOX_NAME + MESSAGE_SIZE);
+                    memcpy(content2, buffer + 1 + MESSAGE_SIZE, BOX_NAME);
+                    memset(buffer + 1 + MESSAGE_SIZE, '\0', BOX_NAME * sizeof(char));
+                    if(strcmp(content2, current_session->box_name) == 0){
                         pcq_enqueue(&queue, buffer);
                         pthread_cond_signal(&current_session->flag);
                         pthread_mutex_unlock(&current_session->lock);
@@ -445,9 +450,9 @@ int main(int argc, char **argv) {
                 }
             }
         }
-        if (op_code = LIST_BOXES_REQUEST){
+        if (op_code == LIST_BOXES_REQUEST){
             for(int i = 0; i < max_sessions; i++){
-                if(container[i].is_free){
+                if(container[i].is_free && container[i].type != PUB && container[i].type != SUB){
                     pthread_mutex_lock(&current_session->lock);
                     current_session = &container[i];
                     memcpy(buffer, &op_code, sizeof(char));
@@ -458,9 +463,7 @@ int main(int argc, char **argv) {
                 }
             }
             pcq_enqueue(&queue, buffer);
-
             pthread_cond_signal(&current_session->flag);
-
             pthread_mutex_unlock(&current_session->lock);
 
         }
@@ -477,34 +480,10 @@ int main(int argc, char **argv) {
                 }
             }
             pcq_enqueue(&queue, buffer);
-
             pthread_cond_signal(&current_session->flag);
-
             pthread_mutex_unlock(&current_session->lock);
         }
-        (read(server_pipe + 1, &content, ))
-
-        for (int i = 0; i < max_sessions; i++){
-            if(container[i].is_free){
-                current_session = &container[i];
-            }
-        }
-
-        /*
-        1- ler conteúdos;
-        2- associar esses conteúdos a uma sessão que esteja livre;
-        3- sinalizar a sessão que vai ficar ocupada (acontece sempre, reasons innit);
-        4- adiciona à queue;
-        */
-
-
-
-        
-
-
-
     }
-
     close(server_pipe);
     tfs_unlink(pipe_name);
     return -1;
