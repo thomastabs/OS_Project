@@ -20,7 +20,7 @@
 
 int new_msgs_read = 0; // for the new messages read within the session pipe
 
-int send_sub_request(char* server_pipe, char* client_pipe, char* box){
+int send_sub_request(int server_pipe, char* client_pipe, char* box){
     char server_request[sizeof(uint8_t) + MAX_CLIENT_NAME * sizeof(char) + BOX_NAME * sizeof(char)];
     uint8_t op_code = SUB_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
@@ -34,8 +34,10 @@ int send_sub_request(char* server_pipe, char* client_pipe, char* box){
 		return -1;
 	}
 
+
+    int c_pipe = open(client_pipe, O_RDONLY);
     int response;
-    if (read(client_pipe, &response, sizeof(response)) == -1 || errno == EPIPE){
+    if (read(c_pipe, &response, sizeof(response)) == -1 || errno == EPIPE){
         fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
         return -1;
     }
@@ -73,13 +75,13 @@ int main(int argc, char **argv) {
     }
 
     // open server pipe for writing the sub request
-    int server_pipe = open(server_pipe, O_WRONLY);
+    int server_pipe = open(register_pipename, O_WRONLY);
     if (server_pipe == -1) {
         fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
 
-    if (send_sub_request(register_pipename, sub_pipename, box_name) == 0){
+    if (send_sub_request(server_pipe, sub_pipename, box_name) == 0){
         /**
         int box = open(box_name, O_RDONLY);
         if (box == -1) {

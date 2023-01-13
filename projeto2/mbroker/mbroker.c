@@ -151,6 +151,15 @@ void case_pub_request(Session* session){
     memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
     memcpy(box, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
     pipe = open(client_name, O_WRONLY);
+
+    for(uint32_t i=0; i< max_sessions; i++){
+        if(container[i].type == PUB && (strcmp(box, container[i].box_name) == 0)){
+            return; // yes ben
+        }
+        if(container[i].type == PUB && (strcmp(client_name, container[i].pipe_name) == 0)){
+            return;
+        }
+    }
     for (int i=0; i < BOX_NAME; i++){
         if (strcmp(box, boxes[i].box_name) == 0){
             session->type = PUB;
@@ -163,6 +172,7 @@ void case_pub_request(Session* session){
             return;
         }
     }
+    return;
 }
 
 
@@ -173,7 +183,12 @@ void case_sub_request(Session* session){
     memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
     memcpy(box, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
     pipe = open(client_name, O_WRONLY);
-    if (session->type != PUB || session->type != SUB){
+    if (session->type != PUB && session->type != SUB){
+        for(uint32_t i=0; i< max_sessions; i++){
+            if(container[i].type == PUB && (strcmp(client_name, container[i].pipe_name) == 0)){
+                return;
+            }
+        }
         for (int i=0; i < BOX_NAME; i++){
             if (strcmp(box, boxes[i].box_name) == 0){
                 session->type = SUB;
@@ -187,7 +202,9 @@ void case_sub_request(Session* session){
                 return;
             }
         }
+        return;
     }
+    return;
 }
 
 void case_create_box(Session* session){

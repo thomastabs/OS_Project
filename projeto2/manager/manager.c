@@ -153,13 +153,19 @@ int send_request_list_box(char* server_pipe, char* client_pipe){
         return -1;
     }
 
+
     // Verifies what the answer was
     if (strlen(response) == 2){
         fprintf(stdout, "NO BOXES FOUND\n");
         return -1;
     }
     for(size_t i = 0; i < strlen(response); i+=58){
-        fprintf(stdout, "%.32s %.8s %.8s %.8s\n", i+2, i+34 , i+42, i+50); // 58 being the size of each response of the request
+        fprintf(stdout, "%.1s %.32s %.8s %.8s %.8s\n", 
+        response+i+1, 
+        response+i+2, 
+        response+i+34, 
+        response+i+42, 
+        response+i+50); // 58 being the size of each response of the request
     } 
 
     return 0;

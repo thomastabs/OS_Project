@@ -18,12 +18,12 @@
 #define MAX_MSG_SIZE 1024   
 
 // Helper function to send pub request
-int send_pub_request(int server_pipe, char* client_pipe, char* box) {
+int send_pub_request(int server_pipe, char* client_name, char* box) {
     char server_request[sizeof(uint8_t) + MAX_CLIENT_NAME * sizeof(char) + BOX_NAME * sizeof(char)];
     uint8_t op_code = PUB_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
     memset(server_request + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
-    memcpy(server_request + 1, client_pipe, strlen(client_pipe) * sizeof(char));
+    memcpy(server_request + 1, client_name, strlen(client_name) * sizeof(char));
     memset(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), '\0', BOX_NAME * sizeof(char));
     memcpy(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), box, strlen(box) * sizeof(char));
 
@@ -32,6 +32,10 @@ int send_pub_request(int server_pipe, char* client_pipe, char* box) {
 		return -1;
 	}
 
+    int client_pipe = open(client_name, O_RDONLY);
+    if (client_pipe == -1){
+        return -1;
+    }
     int response;
     if (read(client_pipe, &response, sizeof(response)) == -1 || errno == EPIPE){
         fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
@@ -40,7 +44,7 @@ int send_pub_request(int server_pipe, char* client_pipe, char* box) {
     return response;
 }
 
-int send_pub_msg(int session_pipe, char pub_pipename, char *msg){
+int send_pub_msg(int session_pipe, char *pub_pipename, char *msg){
     char pub_msg[sizeof(uint8_t) +  MAX_MSG_SIZE * sizeof(char) + MAX_PIPE_NAME * sizeof(char)];
     uint8_t op_code = SEND_MESSAGE;
     memcpy(pub_msg, &op_code, sizeof(uint8_t));
@@ -79,14 +83,14 @@ int main(int argc, char **argv) {
 
     // Open session pipe for writing
     // This waits for someone to open it for reading
-    int server_pipe = open(server_pipe, O_WRONLY);
+    int server_pipe = open(register_pipename, O_WRONLY);
     if (server_pipe == -1) {
         fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
     
     
-    if (send_pub_request(register_pipename, pub_pipename, box_name) == -1){
+    if (send_pub_request(server_pipe, pub_pipename, box_name) == -1){
         fprintf(stderr, "Request Denied. %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     } 
@@ -111,7 +115,7 @@ int main(int argc, char **argv) {
 
             input[strcspn(input, "\n")] = 0;
             if (send_pub_msg(session_pipe, pub_pipename, input) == -1){
-                fprintf(stderr, "Writing went wrong. %s\n");
+                fprintf(stderr, "Writing went wrong.\n");
                 close(session_pipe);
                 unlink(pub_pipename);
                 exit(EXIT_FAILURE);
