@@ -28,16 +28,30 @@ int send_request_create_box(char* server_pipe, char* client_pipe, char* box){
     memset(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), '\0', BOX_NAME * sizeof(char));
     memcpy(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), box, strlen(box) * sizeof(char));
 
+    int s_pipe = open(server_pipe, O_WRONLY);
+    if (s_pipe == -1){
+        fprintf(stderr, "Couldn't open the pipe");
+        return -1;
+    }
     /* Send request to server */
-	if (write(server_pipe, &server_request, sizeof(server_request)) == -1) {
-		return -1;
+	if (write(s_pipe, &server_request, sizeof(server_request)) > 0) {
+		close(s_pipe);
 	}
+    else 
+        return -1;
+
 
     //parte de resposta no servidor
 
     /* Receives answer */
     char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
-    if (read(client_pipe, &response, sizeof(response)) == -1){
+    int c_pipe = open(client_pipe, O_RDONLY);
+    if (c_pipe == -1){
+        return -1;
+    }
+
+    if (read(c_pipe, &response, sizeof(response)) == -1){
+        close(c_pipe);
         return -1;
     }
 
@@ -63,16 +77,30 @@ int send_request_remove_box(char* server_pipe, char* client_pipe, char* box){
     memset(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), '\0', BOX_NAME * sizeof(char));
     memcpy(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), box, strlen(box) * sizeof(char));
 
+    int s_pipe = open(server_pipe, O_WRONLY);
+    if (s_pipe == -1){
+        fprintf(stderr, "Couldn't open the pipe");
+        return -1;
+    }
+
     /* Send request to server */
-	if (write(server_pipe, &server_request, sizeof(server_request)) == -1) {
-		return -1;
+	if (write(s_pipe, &server_request, sizeof(server_request)) > 0) {
+		close(s_pipe);
 	}
+    else 
+        return -1;
 
     //parte de resposta no servidor
 
     /* Receives answer */
     char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
-    if (read(client_pipe, &response, sizeof(response)) == -1){
+    int c_pipe = open(client_pipe, O_RDONLY);
+    if (c_pipe == -1){
+        return -1;
+    }
+
+    if (read(c_pipe, &response, sizeof(response)) == -1){
+        close(c_pipe);
         return -1;
     }
 
@@ -96,18 +124,32 @@ int send_request_list_box(char* server_pipe, char* client_pipe){
     memset(server_request + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
     memcpy(server_request + 1, client_pipe, strlen(client_pipe) * sizeof(char));
 
-    /* Send request to server */
-	if (write(server_pipe, &server_request, sizeof(server_request)) == -1) {
-		return -1;
+    int s_pipe = open(server_pipe, O_WRONLY);
+    if (s_pipe == -1){
+        fprintf(stderr, "Couldn't open the pipe");
+        return -1;
+    }
+    
+	/* Send request to server */
+	if (write(s_pipe, &server_request, sizeof(server_request)) > 0) {
+		close(s_pipe);
 	}
+    else 
+        return -1;
 
     //parte de resposta no servidor
 
     /* Receives answer */
     
     //como esta resposta será de uma certa forma uma variável, iremos meter um pico (1030 neste caso)
-    char response[MAX_REQUEST_SIZE]; 
-    if (read(client_pipe, &response, sizeof(response)) == -1){
+    char response[MAX_REQUEST_SIZE];
+    int c_pipe = open(client_pipe, O_RDONLY);
+    if (c_pipe == -1){
+        return -1;
+    }
+
+    if (read(c_pipe, &response, sizeof(response)) == -1){
+        close(c_pipe);
         return -1;
     }
 
