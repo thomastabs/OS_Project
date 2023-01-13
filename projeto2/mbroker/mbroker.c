@@ -164,8 +164,13 @@ void print_box(Session* session){
     while (true) {
         char buffer[MESSAGE_SIZE];
         ssize_t ret = tfs_read(box, buffer, MESSAGE_SIZE - 1);
-        if (ret == 0){
+        while (ret == 0){
             pthread_cond_wait(&wait_messages_cond, &session->lock);
+            break;
+        }
+
+        if (ret == 0){ // para continuar a prox iteracao do ciclo
+            continue;
         }
 
         if (ret == -1) {
@@ -516,6 +521,7 @@ int main(int argc, char **argv) {
                     read_buffer(server_pipe, buffer  + 1, MAX_CLIENT_NAME + BOX_NAME);
                     memcpy(content3, buffer + 1, MAX_CLIENT_NAME);
                     current_session->pipe_name = content3;
+                    pthread_mutex_unlock(&current_session->lock);
                     break;
                 }
             }
