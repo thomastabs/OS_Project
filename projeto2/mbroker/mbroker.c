@@ -135,6 +135,7 @@ void case_create_box(Session* session){
             memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
             
             write(client_pipe, response, strlen(response));
+            close(client_pipe);
             return;
         }
     }
@@ -168,6 +169,7 @@ void case_create_box(Session* session){
         memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
         
         write(client_pipe, response, strlen(response));
+        close(client_pipe);
     }
     else {   
         char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
@@ -178,19 +180,20 @@ void case_create_box(Session* session){
         // preencer o campo do error message com \0
 
         write(client_pipe, response, strlen(response));
+        close(client_pipe);
     }
 }
 
 void case_remove_box(Session* session){
     int ret = 0;
-    int pipe;
+    int client_pipe;
     char error_message[MESSAGE_SIZE];
     char client_name[MAX_CLIENT_NAME];
     char box_name[BOX_NAME];
     uint8_t op_code = REMOVE_BOX_ANSWER;
     memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
     memcpy(box_name, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
-    pipe = open(client_name, O_WRONLY);
+    client_pipe = open(client_name, O_WRONLY);
     for (int i=0; i < BOX_NAME; i++){
         // lets check if we can find the box within the box list
         if (strcmp(box_name, boxes[i].box_name) != 0){
@@ -203,7 +206,8 @@ void case_remove_box(Session* session){
             memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
             memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
             
-            write(pipe, response, strlen(response));
+            write(client_pipe, response, strlen(response));
+            close(client_pipe);
             return;
         }
     }
@@ -237,7 +241,8 @@ void case_remove_box(Session* session){
         memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
         memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
         
-        write(pipe, response, strlen(response));
+        write(client_pipe, response, strlen(response));
+        close(client_pipe)
     }
     else {   
         char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
@@ -247,7 +252,8 @@ void case_remove_box(Session* session){
         memcpy(response + 2, "\0", strlen(error_message) * sizeof(char));
         // preencer o campo do error message com \0
 
-        write(pipe, response, strlen(response));
+        write(client_pipe, response, strlen(response));
+        close(client_pipe);
     }
 }
 
