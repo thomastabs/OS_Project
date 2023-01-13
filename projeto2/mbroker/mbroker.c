@@ -137,7 +137,9 @@ void case_create_box(Session* session){
             memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
             memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
             
-            write(client_pipe, response, strlen(response));
+            if (write(client_pipe, response, strlen(response)) > 0){
+                close(client_pipe);
+            }
             close(client_pipe);
             return;
         }
@@ -172,7 +174,9 @@ void case_create_box(Session* session){
         memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
         memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
         
-        write(client_pipe, response, strlen(response));
+        if (write(client_pipe, response, strlen(response)) > 0){
+            close(client_pipe);
+        }
         close(client_pipe);
     }
     else {   
@@ -183,7 +187,9 @@ void case_create_box(Session* session){
         memcpy(response + 2, "\0", strlen(error_message) * sizeof(char));
         // preencer o campo do error message com \0
 
-        write(client_pipe, response, strlen(response));
+        if (write(client_pipe, response, strlen(response)) > 0){
+            close(client_pipe);
+        }
         close(client_pipe);
     }
 }
@@ -210,8 +216,9 @@ void case_remove_box(Session* session){
             memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
             memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
             
-            write(client_pipe, response, strlen(response));
-            close(client_pipe);
+            if (write(client_pipe, response, strlen(response)) > 0){
+                close(client_pipe);
+            }
             return;
         }
     }
@@ -245,8 +252,9 @@ void case_remove_box(Session* session){
         memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
         memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
         
-        write(client_pipe, response, strlen(response));
-        close(client_pipe);
+        if (write(client_pipe, response, strlen(response)) > 0){
+            close(client_pipe);
+        }
     }
     else {   
         char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
@@ -256,8 +264,9 @@ void case_remove_box(Session* session){
         memcpy(response + 2, "\0", strlen(error_message) * sizeof(char));
         // preencer o campo do error message com \0
 
-        write(client_pipe, response, strlen(response));
-        close(client_pipe);
+        if (write(client_pipe, response, strlen(response)) > 0){
+            close(client_pipe);
+        }
     }
 }
 
@@ -275,9 +284,9 @@ void case_list_box(Session* session){
         memcpy(response + 1, 1, 1 * sizeof(uint8_t));
         memset(response + 2, '\0', BOX_NAME * sizeof(char));
 
-        if (write(pipe, &response, sizeof(response)) == -1) {
-		    return -1;
-	    }
+        if (write(pipe, response, strlen(response)) > 0){
+            close(pipe);
+        }
     }
     else {
         qsort(boxes, box_count, sizeof(Box), myCompare); //sort the boxes
@@ -293,9 +302,9 @@ void case_list_box(Session* session){
             memcpy(response + 2 + BOX_NAME + sizeof(uint64_t), boxes[i].num_publishers, sizeof(uint64_t));
             memcpy(response + 2 + BOX_NAME + sizeof(uint64_t) + sizeof(uint64_t), boxes[i].num_subscribers, sizeof(uint64_t));
 
-            if (write(pipe, &response, sizeof(response)) == -1) {
-		        return -1;
-	        }
+            if (write(pipe, response, strlen(response)) > 0){
+                close(pipe);
+            }
 
             //memset(response, 0, strlen(response));
         }
@@ -332,7 +341,7 @@ void *thread_function(void *session){
         while (actual_session->is_free) {
             pthread_cond_wait(&actual_session->flag, &actual_session->lock);
         }
-        void* request = pcq_dequeue(&queue);
+        void* request = pcq_dequeue(queue);
         memcpy(&actual_session->buffer, request, MAX_REQUEST_SIZE);
         actual_session->is_free = false;
         memcpy(op_code, &actual_session->buffer, sizeof(uint8_t));
@@ -370,7 +379,7 @@ int main(int argc, char **argv) {
         return -1;
     }    
 
-    if (pcq_create(&queue, max_sessions) == -1){
+    if (pcq_create(queue, max_sessions) == -1){
         fprintf(stderr, "Impossível fazer pedidos\n");
         return -1;
     }
@@ -421,7 +430,7 @@ int main(int argc, char **argv) {
                     break;
                 }
             }
-            pcq_enqueue(&queue, buffer);
+            pcq_enqueue(queue, buffer);
             pthread_cond_signal(&current_session->flag);
             pthread_mutex_unlock(&current_session->lock);
 
@@ -438,7 +447,7 @@ int main(int argc, char **argv) {
                     break;
                 }
             }
-            pcq_enqueue(&queue, buffer);
+            pcq_enqueue(queue, buffer);
             pthread_cond_signal(&current_session->flag);
             pthread_mutex_unlock(&current_session->lock);
         }
