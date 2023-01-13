@@ -71,28 +71,6 @@ int read_buffer(int rx, char *buf, size_t to_read) {
     return 0;
 }
 
-
-void case_pub_request(Session* session){
-    char client_name[MAX_CLIENT_NAME];
-    char box[BOX_NAME];
-    int pipe;
-    memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
-    memcpy(box, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
-    pipe = open(client_name, O_WRONLY);
-    for (int i=0; i < BOX_NAME; i++){
-        if (strcmp(box, boxes[i].box_name) == 0){
-            session->type = PUB;
-            session->pipe = pipe;
-            session->pipe_name = client_name;
-            session->box_name = box;
-           
-            send_message_to_box(session);
-            close(pipe);
-            return;
-        }
-    }
-}
-
 void send_message_to_box(Session *session){
     int pipe;
     pipe = open(session->pipe_name, O_RDONLY);
@@ -126,31 +104,8 @@ void send_message_to_box(Session *session){
     }
 
 }
-void case_sub_request(Session* session){
-    char client_name[MAX_CLIENT_NAME];
-    char box[BOX_NAME];
-    int pipe;
-    memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
-    memcpy(box, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
-    pipe = open(client_name, O_WRONLY);
-    if (session->type != PUB || session->type != SUB){
-        for (int i=0; i < BOX_NAME; i++){
-            if (strcmp(box, boxes[i].box_name) == 0){
-                session->type = SUB;
-                session->pipe = pipe;
-                session->pipe_name = client_name;
-                session->box_name = box;
-                
-                print_box(session);
-                //ok faz o q temn a fzr do resto do sub
-                close(pipe);
-                return;
-            }
-        }
-    }
-}
 
-void print_box(Session* session){
+void read_box(Session* session){
     int box = tfs_open(session->box_name, TFS_O_APPEND);
     if (box == -1){
         //erro
@@ -185,6 +140,52 @@ void print_box(Session* session){
             // erro
             close(sub_pipe);
             exit(EXIT_FAILURE);
+        }
+    }
+}
+
+void case_pub_request(Session* session){
+    char client_name[MAX_CLIENT_NAME];
+    char box[BOX_NAME];
+    int pipe;
+    memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
+    memcpy(box, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
+    pipe = open(client_name, O_WRONLY);
+    for (int i=0; i < BOX_NAME; i++){
+        if (strcmp(box, boxes[i].box_name) == 0){
+            session->type = PUB;
+            session->pipe = pipe;
+            session->pipe_name = client_name;
+            session->box_name = box;
+           
+            send_message_to_box(session);
+            close(pipe);
+            return;
+        }
+    }
+}
+
+
+void case_sub_request(Session* session){
+    char client_name[MAX_CLIENT_NAME];
+    char box[BOX_NAME];
+    int pipe;
+    memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
+    memcpy(box, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
+    pipe = open(client_name, O_WRONLY);
+    if (session->type != PUB || session->type != SUB){
+        for (int i=0; i < BOX_NAME; i++){
+            if (strcmp(box, boxes[i].box_name) == 0){
+                session->type = SUB;
+                session->pipe = pipe;
+                session->pipe_name = client_name;
+                session->box_name = box;
+                
+                read_box(session);
+                //ok faz o q temn a fzr do resto do sub
+                close(pipe);
+                return;
+            }
         }
     }
 }
