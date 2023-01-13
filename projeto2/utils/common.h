@@ -10,10 +10,10 @@
 
 /* 
     maximum size that a request can have
-    in this project, the maximum request size will be 1025 
-    (situation where the publisher will send messages to the other subscribers)
+    in this project, the maximum request size will be 1030
+    (situation where the client sends and recieves messages)
  */
-#define MAX_REQUEST_SIZE (1030)
+#define MAX_REQUEST_SIZE (1300)
 
 /* operation codes (for client-server requests) */
 enum {

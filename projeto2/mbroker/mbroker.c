@@ -18,7 +18,8 @@
 typedef enum { PUB, SUB } client_type;
 
 typedef struct {
-    char *pipe_name; 
+    char *pipe_name;
+    char *box_name; 
     int pipe;
     bool is_free;
     char buffer[MAX_REQUEST_SIZE];
@@ -68,6 +69,7 @@ void case_pub_request(Session* session){
             session->type = PUB;
             session->pipe = pipe;
             session->pipe_name = client_name;
+            session->box_name = box;
             ret = 0;
             if (write(pipe, &ret, sizeof(int)) == 0){
                 close(pipe);
@@ -96,6 +98,7 @@ void case_sub_request(Session* session){
                 session->type = SUB;
                 session->pipe = pipe;
                 session->pipe_name = client_name;
+                session->box_name = box;
                 ret = 0;
                 if(write(pipe, &ret, sizeof(int)) == 0){
                     close(pipe);
@@ -242,7 +245,7 @@ void case_remove_box(Session* session){
         memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
         
         write(client_pipe, response, strlen(response));
-        close(client_pipe)
+        close(client_pipe);
     }
     else {   
         char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
@@ -396,6 +399,7 @@ int main(int argc, char **argv) {
     init_threads(container);
 
     while(true){
+        char buffer[MAX_REQUEST_SIZE];
         char content[MESSAGE_SIZE];
         char content2[BOX_NAME];
         char content3[MAX_CLIENT_NAME];
@@ -405,37 +409,55 @@ int main(int argc, char **argv) {
             return -1;
         }
 
-        if (op_code == SEND_MESSAGE || op_code == RECEIVE_MESSAGE){
+        if (op_code == SEND_MESSAGE){
             for (int i = 0; i < max_sessions; i++){
                 if (container[i].type == PUB){
                     pthread_mutex_lock(&current_session->lock);
                     current_session = &container[i];
-                    memcpy(current_session->buffer, &op_code, sizeof(char));
-                    read_buffer(server_pipe, current_session->buffer + 1, MAX_CLIENT_NAME);
-                    memcpy(container, current_session->buffer + 1, MAX_CLIENT_NAME);
-                    current_session->pipe_name = content;
-                    break;
+                    memcpy(buffer, &op_code, sizeof(char));
+                    read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME + MESSAGE_SIZE);
+                    memcpy(content3, buffer + 1 + MESSAGE_SIZE, MAX_CLIENT_NAME);
+                    memset(buffer + 1 + MESSAGE_SIZE, '\0', MAX_CLIENT_NAME * sizeof(char));
+                    if (strcmp(content3, current_session->pipe_name) == 0){
+                        pcq_enqueue(&queue, buffer);
+                        pthread_cond_signal(&current_session->flag);
+                        pthread_mutex_unlock(&current_session->lock);
+                        break;
+                    }
                 }
             }
-            read(server_pipe, &content, MESSAGE_SIZE * sizeof(char));
-            read(server_pipe, &content3, MAX_CLIENT_NAME * sizeof(char));
-            //...
-
         }
 
+        if (op_code == RECEIVE_MESSAGE){
+            for (int i = 0; i < max_sessions; i++){
+                if (container[i].type == SUB){
+                    pthread_mutex_lock(&current_session->lock);
+                    current_session = &container[i];
+                    memcpy(buffer, &op_code, sizeof(char));
+                    read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME + MESSAGE_SIZE);
+                    memcpy(content3, buffer + 1 + MESSAGE_SIZE, MAX_CLIENT_NAME);
+                    memset(buffer + 1 + MESSAGE_SIZE, '\0', MAX_CLIENT_NAME * sizeof(char));
+                    if(strcmp(/*conteudo de caixa*/, current_session->box_name) == 0){
+                        pcq_enqueue(&queue, buffer);
+                        pthread_cond_signal(&current_session->flag);
+                        pthread_mutex_unlock(&current_session->lock);
+                    }
+                }
+            }
+        }
         if (op_code = LIST_BOXES_REQUEST){
             for(int i = 0; i < max_sessions; i++){
                 if(container[i].is_free){
                     pthread_mutex_lock(&current_session->lock);
                     current_session = &container[i];
-                    memcpy(current_session->buffer, &op_code, sizeof(char));
-                    read_buffer(server_pipe, current_session->buffer + 1, MAX_CLIENT_NAME);
-                    memcpy(container, current_session->buffer + 1, MAX_CLIENT_NAME);
-                    current_session->pipe_name = content;
+                    memcpy(buffer, &op_code, sizeof(char));
+                    read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME);
+                    memcpy(content3, buffer + 1, MAX_CLIENT_NAME);
+                    current_session->pipe_name = content3;
                     break;
                 }
             }
-            pcq_enqueue(&queue, current_session->buffer);
+            pcq_enqueue(&queue, buffer);
 
             pthread_cond_signal(&current_session->flag);
 
@@ -447,13 +469,14 @@ int main(int argc, char **argv) {
                 if(container[i].is_free){
                     pthread_mutex_lock(&current_session->lock);
                     current_session = &container[i];
-                    read_buffer(server_pipe, current_session->buffer  + 1, MAX_CLIENT_NAME + BOX_NAME);
-                    memcpy(container, current_session->buffer + 1, MAX_CLIENT_NAME);
-                    current_session->pipe_name = content;
+                    memcpy(buffer, &op_code, sizeof(char));
+                    read_buffer(server_pipe, buffer  + 1, MAX_CLIENT_NAME + BOX_NAME);
+                    memcpy(content3, buffer + 1, MAX_CLIENT_NAME);
+                    current_session->pipe_name = content3;
                     break;
                 }
             }
-            pcq_enqueue(&queue, current_session->buffer);
+            pcq_enqueue(&queue, buffer);
 
             pthread_cond_signal(&current_session->flag);
 
@@ -488,8 +511,7 @@ int main(int argc, char **argv) {
 }
 
 /* Auxiliary functions for sorting the boxes*/
-static int myCompare(const void* a, const void* b)
-{
+static int myCompare(const void* a, const void* b){
   return strcmp(((Box *)a)->box_name, ((Box *)b)->box_name);
 }
 
