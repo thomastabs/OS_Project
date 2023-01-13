@@ -46,10 +46,31 @@ size_t box_count = 0;
 pthread_cond_t wait_messages_cond;
 pc_queue_t *queue;
 
+
 /* Auxiliary functions for sorting the boxes*/
 static int myCompare(const void* a, const void* b){
   return strcmp(((Box *)a)->box_name, ((Box *)b)->box_name);
 }
+
+
+/*
+ * Reads (and guarantees that it reads correctly) a given number of bytes
+ * from a pipe to a given buffer
+ */
+int read_buffer(int rx, char *buf, size_t to_read) {
+    ssize_t ret;
+    size_t read_so_far = 0;
+    while (read_so_far < to_read) {
+        ret = read(rx, buf + read_so_far, to_read - read_so_far);
+        if (ret == -1) {
+            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+            return -1;
+        }
+        read_so_far += (size_t) ret;
+    }
+    return 0;
+}
+
 
 void case_pub_request(Session* session){
     char client_name[MAX_CLIENT_NAME];
@@ -308,8 +329,7 @@ void case_remove_box(Session* session){
         char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
         memcpy(response, &op_code, sizeof(uint8_t));
         memcpy(response + 1, &ret, sizeof(int32_t));
-        memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
-        memcpy(response + 2, "\0", strlen(error_message) * sizeof(char));
+        memcpy(response + 2, "\0", sizeof(char));
         // preencer o campo do error message com \0
 
         if (write(client_pipe, response, strlen(response)) > 0){
@@ -319,11 +339,11 @@ void case_remove_box(Session* session){
 }
 
 void case_list_box(Session* session){
-    int pipe;
+    int client_pipe;
     char client_name[MAX_CLIENT_NAME];
     uint8_t op_code = LIST_BOXES_ANSWER;
     memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
-    pipe = open(client_name, O_WRONLY);
+    client_pipe = open(client_name, O_WRONLY);
 
     if(box_count == 0){
         uint8_t i = 1;
@@ -332,8 +352,8 @@ void case_list_box(Session* session){
         memcpy(response + 1, &i, 1 * sizeof(uint8_t));
         memset(response + 2, '\0', BOX_NAME * sizeof(char));
 
-        if (write(pipe, &response, sizeof(response)) == -1) {
-		    return -1;
+        if (write(client_pipe, &response, sizeof(response)) > 0) {
+		    close(client_pipe);
 	    }
     }
     else {
@@ -350,8 +370,8 @@ void case_list_box(Session* session){
             memcpy(response + 2 + BOX_NAME + sizeof(uint64_t), &boxes[i].num_publishers, sizeof(uint64_t));
             memcpy(response + 2 + BOX_NAME + sizeof(uint64_t) + sizeof(uint64_t), &boxes[i].num_subscribers, sizeof(uint64_t));
 
-            if (write(pipe, &response, sizeof(response)) == -1) {
-		        return -1;
+            if (write(client_pipe, &response, sizeof(response)) > 0) {
+		        close(client_pipe);
 	        }
 
             //memset(response, 0, strlen(response));
@@ -374,18 +394,23 @@ void *thread_function(void *session){
         memcpy(&op_code, &actual_session->buffer, sizeof(uint8_t));
 
         switch (op_code) {
-        case PUB_REQUEST:
-            case_pub_request(actual_session);
-        case SUB_REQUEST:
-            case_sub_request(actual_session);
-        case CREATE_BOX_REQUEST:
-            case_create_box(actual_session);
-        case REMOVE_BOX_REQUEST:
-            case_remove_box(actual_session);
-        case LIST_BOXES_REQUEST:
-            case_list_box(actual_session);
-        default:
-            break;
+            case PUB_REQUEST:
+                case_pub_request(actual_session);
+                break;
+            case SUB_REQUEST:
+                case_sub_request(actual_session);
+                break;
+            case CREATE_BOX_REQUEST:
+                case_create_box(actual_session);
+                break;
+            case REMOVE_BOX_REQUEST:
+                case_remove_box(actual_session);
+                break;
+            case LIST_BOXES_REQUEST:
+                case_list_box(actual_session);
+                break;
+            default:
+                break;
         } 
         actual_session->is_free = true;
         pthread_mutex_unlock(&actual_session->lock);
@@ -507,20 +532,3 @@ int main(int argc, char **argv) {
 
 
 
-/*
- * Reads (and guarantees that it reads correctly) a given number of bytes
- * from a pipe to a given buffer
- */
-int read_buffer(int rx, char *buf, size_t to_read) {
-    ssize_t ret;
-    size_t read_so_far = 0;
-    while (read_so_far < to_read) {
-        ret = read(rx, buf + read_so_far, to_read - read_so_far);
-        if (ret == -1) {
-            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-            return -1;
-        }
-        read_so_far += (size_t) ret;
-    }
-    return 0;
-}
