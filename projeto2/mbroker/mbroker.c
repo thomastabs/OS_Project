@@ -493,35 +493,36 @@ int main(int argc, char **argv) {
         if (op_code == LIST_BOXES_REQUEST){
             for(int i = 0; i < max_sessions; i++){
                 if(container[i].is_free && container[i].type != PUB && container[i].type != SUB){
-                    pthread_mutex_lock(&current_session->lock);
                     current_session = &container[i];
+                    pthread_mutex_lock(&current_session->lock);
                     memcpy(buffer, &op_code, sizeof(char));
                     read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME);
                     memcpy(content3, buffer + 1, MAX_CLIENT_NAME);
                     current_session->pipe_name = content3;
+                   
+                    pcq_enqueue(queue, buffer);
+                    pthread_cond_signal(&current_session->flag);
+                    pthread_mutex_unlock(&current_session->lock);
                     break;
                 }
             }
-            pcq_enqueue(queue, buffer);
-            pthread_cond_signal(&current_session->flag);
-            pthread_mutex_unlock(&current_session->lock);
-
         }
         else{
             for (int i = 0; i < max_sessions; i++){
-                if(container[i].is_free){
-                    pthread_mutex_lock(&current_session->lock);
+                if(container[i].is_free && container[i].type != PUB && container[i].type != SUB){
                     current_session = &container[i];
+                    pthread_mutex_lock(&current_session->lock);
                     memcpy(buffer, &op_code, sizeof(char));
                     read_buffer(server_pipe, buffer  + 1, MAX_CLIENT_NAME + BOX_NAME);
                     memcpy(content3, buffer + 1, MAX_CLIENT_NAME);
                     current_session->pipe_name = content3;
+                   
+                    pcq_enqueue(queue, buffer);
+                    pthread_cond_signal(&current_session->flag);
+                    pthread_mutex_unlock(&current_session->lock);
                     break;
                 }
             }
-            pcq_enqueue(queue, buffer);
-            pthread_cond_signal(&current_session->flag);
-            pthread_mutex_unlock(&current_session->lock);
         }
     }
     close(server_pipe);
