@@ -396,10 +396,6 @@ void *thread_function(void *session){
             case_remove_box(actual_session);
         case LIST_BOXES_REQUEST:
             case_list_box(actual_session);
-        case SEND_MESSAGE:
-            send_message(actual_session);
-        case RECEIVE_MESSAGE:
-            receive_message(actual_session);
         }
         actual_session->is_free = true;
         pthread_mutex_unlock(&actual_session->lock);
@@ -460,43 +456,6 @@ int main(int argc, char **argv) {
         Session *current_session;
         if (read(server_pipe, &op_code, sizeof(uint8_t)) == -1) {
             return -1;
-        }
-
-        if (op_code == SEND_MESSAGE){
-            for (int i = 0; i < max_sessions; i++){
-                if (container[i].type == PUB){
-                    pthread_mutex_lock(&current_session->lock);
-                    current_session = &container[i];
-                    memcpy(buffer, &op_code, sizeof(uint8_t));
-                    read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME + MESSAGE_SIZE);
-                    memcpy(content3, buffer + 1 + MESSAGE_SIZE, MAX_CLIENT_NAME);
-                    memset(buffer + 1 + MESSAGE_SIZE, '\0', MAX_CLIENT_NAME * sizeof(char));
-                    if (strcmp(content3, current_session->pipe_name) == 0){
-                        pcq_enqueue(&queue, buffer);
-                        pthread_cond_signal(&current_session->flag);
-                        pthread_mutex_unlock(&current_session->lock);
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (op_code == RECEIVE_MESSAGE){
-            for (int i = 0; i < max_sessions; i++){
-                if (container[i].type == SUB){
-                    pthread_mutex_lock(&current_session->lock);
-                    current_session = &container[i];
-                    memcpy(buffer, &op_code, sizeof(uint8_t));
-                    read_buffer(server_pipe, buffer + 1, BOX_NAME + MESSAGE_SIZE);
-                    memcpy(content2, buffer + 1 + MESSAGE_SIZE, BOX_NAME);
-                    memset(buffer + 1 + MESSAGE_SIZE, '\0', BOX_NAME * sizeof(char));
-                    if(strcmp(content2, current_session->box_name) == 0){
-                        pcq_enqueue(&queue, buffer);
-                        pthread_cond_signal(&current_session->flag);
-                        pthread_mutex_unlock(&current_session->lock);
-                    }
-                }
-            }
         }
         if (op_code == LIST_BOXES_REQUEST){
             for(int i = 0; i < max_sessions; i++){
