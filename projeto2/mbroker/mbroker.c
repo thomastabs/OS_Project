@@ -55,15 +55,6 @@ void case_pub_request(Session* session){
     memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
     memcpy(box, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
     pipe = open(client_name, O_WRONLY);
-    for (int i=0; i < max_sessions; i++){
-        if(container[i].type == PUB){
-            ret = -1;
-            if(write(pipe, &ret, sizeof(int)) == 0){
-                close(pipe);
-                return;
-            }
-        }
-    }
     for (int i=0; i < BOX_NAME; i++){
         if (strcmp(box, boxes[i].box_name) == 0){
             session->type = PUB;
@@ -71,19 +62,47 @@ void case_pub_request(Session* session){
             session->pipe_name = client_name;
             session->box_name = box;
             ret = 0;
-            if (write(pipe, &ret, sizeof(int)) == 0){
-                close(pipe);
-                return;
-            }
+           
+            send_message_to_box(session);
+            close(pipe);
+            return;
         }
-    }
-    ret = -1;
-    if(write(pipe, &ret, sizeof(int)) == 0){
-        close(pipe);
-        return;
     }
 }
 
+void send_message_to_box(Session *session){
+    int pipe;
+    pipe = open(session->pipe_name, O_RDONLY);
+    if (pipe == -1){
+        // erro
+    }
+
+    while (true){
+        char buffer[MAX_REQUEST_SIZE];
+        ssize_t ret = read(pipe, buffer, MAX_REQUEST_SIZE);
+
+        if (ret > 0){
+            char msg[MESSAGE_SIZE];
+            memset(msg, '\0', strlen(msg));
+            memcpy(msg, buffer + sizeof(uint8_t) , MESSAGE_SIZE * sizeof(char));
+
+            int box = tfs_open(session->box_name, TFS_O_APPEND);
+            if (box == -1){
+                // erro
+            }
+            int w = tfs_write(box, msg, strlen(msg));
+            if (w == -1){
+                // erro
+            }
+            tfs_close(box);
+            pthread_cond_broadcast(&wait_messages_cond);
+        }
+        if (ret == 0){
+            // EOF
+        }
+    }
+
+}
 void case_sub_request(Session* session){
     int ret;
     char client_name[MAX_CLIENT_NAME];
@@ -99,20 +118,48 @@ void case_sub_request(Session* session){
                 session->pipe = pipe;
                 session->pipe_name = client_name;
                 session->box_name = box;
-                ret = 0;
-                if(write(pipe, &ret, sizeof(int)) == 0){
-                    close(pipe);
-                    return;
-                }
+                
+                print_box(session);
+                //ok faz o q temn a fzr do resto do sub
+                close(pipe);
+                return;
             }
         }
     }
-    ret = -1;
-    if(write(pipe, &ret, sizeof(int)) == 0){
-        close(pipe);
-        return;
+}
+
+void print_box(Session* session){
+    int box = tfs_open(session->box_name, TFS_O_APPEND);
+    if (box == -1){
+        //erro
     }
-    return;
+    int sub_pipe = open(session->pipe_name, O_WRONLY);
+    if (sub_pipe == -1){
+        //erro
+    }
+
+    // will print the initial state of the content in 
+    while (true) {
+        char buffer[MESSAGE_SIZE];
+        ssize_t ret = tfs_read(box, buffer, MESSAGE_SIZE - 1);
+        if (ret == 0){
+            pthread_cond_wait(&wait_messages_cond, &session->lock);
+        }
+
+        if (ret == -1) {
+            // ret == -1 indicates error
+            fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+
+        buffer[ret] = 0;
+
+        if (write(sub_pipe, buffer, strlen(buffer)) == -1){
+            // erro
+            close(sub_pipe);
+            exit(EXIT_FAILURE);
+        }
+    }
 }
 
 void case_create_box(Session* session){
@@ -301,6 +348,7 @@ void case_list_box(Session* session){
         }
     }
 }
+
 
 
 
