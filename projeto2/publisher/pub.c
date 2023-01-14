@@ -37,7 +37,7 @@ int send_pub_request(int server_pipe, char* client_name, char* box) {
         break;
     }
 
-    if (flag = 1){
+    if (flag == 1){
         return -1;
     }
     /* Send request to server */
