@@ -10,6 +10,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <signal.h>
 #include <producer-consumer.h>
 #include "../utils/common.h"
 #include "logging.h"
@@ -36,11 +37,17 @@ pthread_cond_t wait_messages_cond;
 pc_queue_t *queue;
 
 
+static void mbroker_exit(int sig) {
+    if (sig == SIGINT) {
+        fprintf(stdout, "\nExited Mbroker safely");
+        return; // Resume execution at point of interruption
+    }
+}
+
 /* Auxiliary functions for sorting the boxes*/
 static int myCompare(const void* a, const void* b){
   return strcmp(((Box *)a)->box_name, ((Box *)b)->box_name);
 }
-
 
 /*
  * Reads (and guarantees that it reads correctly) a given number of bytes
@@ -104,7 +111,7 @@ void read_box(Session* session){
         //erro
     }
 
-    // will print the initial state of the content in 
+    // will send to sub pipe the initial state of the content in 
     while (true) {
         char buffer[MESSAGE_SIZE];
         ssize_t ret = tfs_read(box, buffer, MESSAGE_SIZE - 1);
@@ -125,11 +132,20 @@ void read_box(Session* session){
 
         buffer[ret] = 0;
 
-        if (write(sub_pipe, buffer, strlen(buffer)) == -1){
+        char buffer_with_op_code[sizeof(uint8_t) + MESSAGE_SIZE];
+        uint8_t op_code = SEND_MESSAGE; 
+        memcpy(buffer_with_op_code, &op_code, sizeof(uint8_t));
+        memset(buffer_with_op_code + 1, '\0', MESSAGE_SIZE * sizeof(char));
+        memcpy(buffer_with_op_code + 1, buffer, strlen(buffer) * sizeof(char));
+
+        if (write(sub_pipe, buffer_with_op_code, strlen(buffer)) == -1){
             // erro
             close(sub_pipe);
             exit(EXIT_FAILURE);
         }
+
+        memset(buffer, 0, strlen(buffer));
+        memset(buffer_with_op_code, 0, strlen(buffer_with_op_code));
     }
 }
 
@@ -581,6 +597,17 @@ int main(int argc, char **argv) {
                 }
             }
         }
+
+        if (signal(SIGINT, mbroker_exit) == SIG_ERR){
+            pcq_destroy(queue);
+            free(queue);
+            free(container);
+            
+            close(server_pipe);
+            tfs_unlink(pipe_name);
+            exit(EXIT_SUCCESS);
+        }
+
     }
     close(server_pipe);
     tfs_unlink(pipe_name);

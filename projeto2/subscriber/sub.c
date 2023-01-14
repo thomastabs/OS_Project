@@ -118,7 +118,7 @@ int main(int argc, char **argv) {
 
             buffer[ret] = 0;
             new_msgs_read++;
-            fprintf(stdout, "%s\n", buffer);
+            fprintf(stdout, "%s\n", buffer + 1); // separa o opcode da msg 
 
             if (signal(SIGINT, sig_handler) == SIG_ERR) {
                 for(int i = 0; i< BOX_NAME; i++){
