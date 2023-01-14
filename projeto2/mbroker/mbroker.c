@@ -569,7 +569,7 @@ int main(int argc, char **argv) {
         }
         if (op_code == LIST_BOXES_REQUEST){
             for(int i = 0; i < max_sessions; i++){
-                if(container[i].is_free && container[i].type != PUB && container[i].type != SUB){
+                if(container[i].pipe_name == NULL){
                     current_session = &container[i];
                     pthread_mutex_lock(&current_session->lock);
                     memcpy(buffer, &op_code, sizeof(char));
@@ -586,7 +586,7 @@ int main(int argc, char **argv) {
         }
         else{
             for (int i = 0; i < max_sessions; i++){
-                if(container[i].is_free && container[i].type != PUB && container[i].type != SUB){
+                if(container[i].pipe_name == NULL){
                     current_session = &container[i];
                     pthread_mutex_lock(&current_session->lock);
                     memcpy(buffer, &op_code, sizeof(char));
