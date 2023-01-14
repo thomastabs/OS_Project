@@ -255,7 +255,7 @@ void case_create_box(Session* session){
     memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
     memcpy(box_name, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
     client_pipe = open(client_name, O_WRONLY);
-    for (int i=0; i < BOX_NAME; i++){
+    for (int i=0; i < box_count; i++){
         // lets check if there is any box with the same name 
         if (strcmp(box_name, boxes[i].box_name) == 0){
             ret = -1; 
@@ -461,11 +461,10 @@ void *thread_function(void *session){
     uint8_t op_code;
 
     while(true){
-        pthread_mutex_lock(&actual_session->lock);
         while (actual_session->is_free) {
             pthread_cond_wait(&actual_session->flag, &actual_session->lock);
         }
-        void* request = pcq_dequeue(queue);
+        char* request = (char *) pcq_dequeue(queue);
         memcpy(&actual_session->buffer, request, MAX_REQUEST_SIZE);
         actual_session->is_free = false;
         memcpy(&op_code, &actual_session->buffer, sizeof(uint8_t));
@@ -490,7 +489,6 @@ void *thread_function(void *session){
                 break;
         } 
         actual_session->is_free = true;
-        pthread_mutex_unlock(&actual_session->lock);
     }
 }
 
@@ -506,7 +504,7 @@ int init_threads() {
             return -1;
         }
 
-        if (pthread_create(&container[i].thread, NULL, thread_function, (void *) &container[i]) != 0) {
+        if (pthread_create(&container[i].thread, NULL, &thread_function, (void *) &container[i]) != 0) {
             fprintf(stderr, "[ERR]: couldn't create threads: %s\n", strerror(errno));
 			return -1;
 		}
@@ -563,7 +561,7 @@ int main(int argc, char **argv) {
         char buffer[MAX_REQUEST_SIZE];
         char content3[MAX_CLIENT_NAME];
         uint8_t op_code;
-        u_int8_t exception = LIST_BOXES_REQUEST;
+        uint8_t exception = LIST_BOXES_REQUEST;
         Session *current_session;
         if (read(server_pipe, &op_code, sizeof(uint8_t)) == -1) {
             return -1;
@@ -572,7 +570,6 @@ int main(int argc, char **argv) {
             for(int i = 0; i < max_sessions; i++){
                 if(container[i].pipe_name == NULL){
                     current_session = &container[i];
-                    pthread_mutex_lock(&current_session->lock);
                     memcpy(buffer, &op_code, sizeof(char));
                     read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME);
                     memcpy(content3, buffer + 1, MAX_CLIENT_NAME);
@@ -580,7 +577,6 @@ int main(int argc, char **argv) {
                    
                     pcq_enqueue(queue, buffer);
                     pthread_cond_signal(&current_session->flag);
-                    pthread_mutex_unlock(&current_session->lock);
                     break;
                 }
             }
@@ -589,18 +585,18 @@ int main(int argc, char **argv) {
             for (int i = 0; i < max_sessions; i++){
                 if(container[i].pipe_name == NULL){
                     current_session = &container[i];
-                    pthread_mutex_lock(&current_session->lock);
                     memcpy(buffer, &op_code, sizeof(char));
                     read_buffer(server_pipe, buffer  + 1, MAX_CLIENT_NAME + BOX_NAME);
                     memcpy(content3, buffer + 1, MAX_CLIENT_NAME);
                     current_session->pipe_name = content3;
+                    current_session->is_free = false;
                     pcq_enqueue(queue, buffer);
                     pthread_cond_signal(&current_session->flag);
-                    pthread_mutex_unlock(&current_session->lock);
                     break;
                 }
             }
         }
+
 
         if (signal(SIGINT, mbroker_exit) == SIG_ERR){
             pcq_destroy(queue);
