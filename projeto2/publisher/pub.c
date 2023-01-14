@@ -19,6 +19,7 @@
 
 // Helper function to send pub request
 int send_pub_request(int server_pipe, char* client_name, char* box) {
+    int flag;
     char server_request[sizeof(uint8_t) + MAX_CLIENT_NAME * sizeof(char) + BOX_NAME * sizeof(char)];
     uint8_t op_code = PUB_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
@@ -27,6 +28,18 @@ int send_pub_request(int server_pipe, char* client_name, char* box) {
     memset(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), '\0', BOX_NAME * sizeof(char));
     memcpy(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), box, strlen(box) * sizeof(char));
 
+    for(int i=0; i< BOX_NAME; i++){
+        if (strcmp(boxes[i].box_name, box) != 0){
+            flag = 1;
+            continue;
+        }
+        flag = 0;
+        break;
+    }
+
+    if (flag = 1){
+        return -1;
+    }
     /* Send request to server */
 	if (write(server_pipe, &server_request, sizeof(server_request)) == -1) {
 		return -1;
@@ -88,7 +101,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
-    
     
     if (send_pub_request(server_pipe, pub_pipename, box_name) == -1){
         fprintf(stderr, "Request Denied. %s\n", strerror(errno));

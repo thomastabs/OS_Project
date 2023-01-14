@@ -134,6 +134,7 @@ void read_box(Session* session){
 }
 
 void case_pub_request(Session* session){
+    int ret;
     char client_name[MAX_CLIENT_NAME];
     char box[BOX_NAME];
     int pipe;
@@ -143,10 +144,16 @@ void case_pub_request(Session* session){
 
     for(uint32_t i=0; i< max_sessions; i++){
         if(container[i].type == PUB && (strcmp(box, container[i].box_name) == 0)){
-            return; // yes ben
+            ret = -1;
+            if(write(pipe, &ret, sizeof(int)) > 0){
+                return;
+            };
         }
         if(container[i].type == PUB && (strcmp(client_name, container[i].pipe_name) == 0)){
-            return;
+            ret = -1;
+            if (write(pipe, &ret, sizeof(int)) > 0){
+                return;
+            };
         }
     }
     for (int i=0; i < BOX_NAME; i++){
@@ -156,17 +163,26 @@ void case_pub_request(Session* session){
             session->pipe_name = client_name;
             session->box_name = box;
             boxes[i].num_publishers++;
-           
-            send_message_to_box(session);
-            close(pipe);
-            return;
+            ret = 0;
+            if (write(pipe, &ret, sizeof(int)) > 0){
+                send_message_to_box(session);
+                close(pipe);
+            };
+            ret = -1;
+            if (write(pipe, &ret, sizeof(int)) > 0){
+                return;
+            };
         }
     }
-    return;
+    ret = -1;
+    if (write(pipe, &ret, sizeof(int)) > 0){
+        return;
+    };
 }
 
 
 void case_sub_request(Session* session){
+    int ret;
     char client_name[MAX_CLIENT_NAME];
     char box[BOX_NAME];
     int pipe;
@@ -175,8 +191,11 @@ void case_sub_request(Session* session){
     pipe = open(client_name, O_WRONLY);
     if (session->type != PUB && session->type != SUB){
         for(uint32_t i=0; i< max_sessions; i++){
-            if(container[i].type == PUB && (strcmp(client_name, container[i].pipe_name) == 0)){
-                return;
+            if(container[i].type == SUB && (strcmp(client_name, container[i].pipe_name) == 0)){
+                ret = -1;
+                if(write(pipe, &ret, sizeof(int)) > 0){
+                    return;
+                };
             }
         }
         for (int i=0; i < BOX_NAME; i++){
@@ -187,15 +206,27 @@ void case_sub_request(Session* session){
                 session->box_name = box;
                 boxes[i].num_subscribers++;
                 
-                read_box(session);
-                //ok faz o q temn a fzr do resto do sub
-                close(pipe);
+                ret = 0;
+                if(write(pipe, &ret, sizeof(int)) > 0){
+                    read_box(session);
+                    close(pipe);
+                    return;
+                };
+            ret = -1;
+            if (write(pipe, &ret, sizeof(int)) > 0){
                 return;
-            }
+            };
         }
-        return;
     }
-    return;
+        ret = -1;
+        if (write(pipe, &ret, sizeof(int)) > 0){
+            return;
+        };
+    }
+    ret = -1;
+    if (write(pipe, &ret, sizeof(int)) > 0){
+        return;
+    };
 }
 
 void case_create_box(Session* session){
@@ -291,19 +322,25 @@ void case_remove_box(Session* session){
         // lets check if we can find the box within the box list
         if (strcmp(box_name, boxes[i].box_name) != 0){
             ret = -1;
-            strcpy(error_message, "There isn't a box with the specified box name.\n");
-
-            char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
-            memcpy(response, &op_code, sizeof(uint8_t));
-            memcpy(response + 1, &ret, sizeof(int32_t));
-            memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
-            memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
-            
-            if (write(client_pipe, response, strlen(response)) > 0){
-                close(client_pipe);
-            }
-            return;
+            continue;
         }
+        ret = 0;
+        break;
+    }
+
+    if (ret == -1){
+        strcpy(error_message, "There isn't a box with the specified box name.\n");
+
+        char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
+        memcpy(response, &op_code, sizeof(uint8_t));
+        memcpy(response + 1, &ret, sizeof(int32_t));
+        memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
+        memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
+        
+        if (write(client_pipe, response, strlen(response)) > 0){
+            close(client_pipe);
+        }
+        return;
     }
 
     int box = tfs_unlink(box_name);
