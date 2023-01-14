@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
     // This waits for someone to open it for reading
     int server_pipe = open(register_pipename, O_WRONLY);
     if (server_pipe == -1) {
-        fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
+        fprintf(stderr, "[ERR]: lmao: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
     

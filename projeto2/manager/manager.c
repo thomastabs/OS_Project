@@ -225,7 +225,6 @@ int main(int argc, char **argv) {
         send_request_list_box(server_pipe, pipe_name);
     }
 
-    
-    WARN("unimplemented"); // TODO: implement
-    return -1;
+    unlink(pipe_name);
+    return 0;
 }

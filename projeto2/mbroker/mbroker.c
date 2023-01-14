@@ -593,6 +593,10 @@ int main(int argc, char **argv) {
                     read_buffer(server_pipe, buffer  + 1, MAX_CLIENT_NAME + BOX_NAME);
                     memcpy(content3, buffer + 1, MAX_CLIENT_NAME);
                     current_session->pipe_name = content3;
+
+                    pcq_enqueue(queue, buffer);
+                    pthread_cond_signal(&current_session->flag);
+                    pthread_mutex_unlock(&current_session->lock);
                     break;
                 }
             }
