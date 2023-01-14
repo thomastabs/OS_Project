@@ -82,30 +82,6 @@ int main(int argc, char **argv) {
     }
 
     if (send_sub_request(server_pipe, sub_pipename, box_name) == 0){
-        /**
-        int box = open(box_name, O_RDONLY);
-        if (box == -1) {
-            fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
-            exit(EXIT_FAILURE);
-        }
-
-        // will print the initial state of the content in 
-        while (true) {
-            char buffer[MAX_MSG_SIZE];
-            ssize_t ret = read(box, buffer, MAX_MSG_SIZE - 1);
-            if (ret == 0) {
-                // ret == 0 indicates EOF
-                break;
-            } else if (ret == -1) {
-                // ret == -1 indicates error
-                fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-                exit(EXIT_FAILURE);
-            }
-
-            buffer[ret] = 0;
-            fprintf(stdout, "%s\n", buffer);
-        }
-        **/
 
         int sub_pipe = open(sub_pipename, O_RDONLY);
         if (sub_pipe == -1) {
@@ -137,7 +113,6 @@ int main(int argc, char **argv) {
                         break;
                     }
                 }
-                fprintf("%d messages have been read", new_msgs_read);
                 close(sub_pipe);
                 unlink(sub_pipename);
                 exit(EXIT_SUCCESS);
