@@ -11,10 +11,10 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <signal.h>
-#include <producer-consumer.h>
+#include "../producer-consumer/producer-consumer.h"
 #include "../utils/common.h"
-#include "logging.h"
-#include "fs/operations.h"
+#include "../utils/logging.h"
+#include "../fs/operations.h"
 
 typedef enum { PUB, SUB } client_type;
 
