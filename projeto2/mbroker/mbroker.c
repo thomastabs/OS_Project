@@ -563,11 +563,12 @@ int main(int argc, char **argv) {
         char buffer[MAX_REQUEST_SIZE];
         char content3[MAX_CLIENT_NAME];
         uint8_t op_code;
+        u_int8_t exception = LIST_BOXES_REQUEST;
         Session *current_session;
         if (read(server_pipe, &op_code, sizeof(uint8_t)) == -1) {
             return -1;
         }
-        if (op_code == LIST_BOXES_REQUEST){
+        if (op_code == exception){
             for(int i = 0; i < max_sessions; i++){
                 if(container[i].pipe_name == NULL){
                     current_session = &container[i];
