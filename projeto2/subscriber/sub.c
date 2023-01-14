@@ -21,15 +21,15 @@
 
 int new_msgs_read = 0; // for the new messages read within the session pipe
 
-int send_sub_request(int server_pipe, char* client_name, char* box){
+int send_sub_request(int server_pipe, char* client_pipe, char* box){
     int flag;
-    char server_request[sizeof(uint8_t) + strlen(client_name) + strlen(box) + 2];
+    char server_request[sizeof(uint8_t) + MAX_CLIENT_NAME * sizeof(char) + BOX_NAME * sizeof(char)];
     uint8_t op_code = SUB_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
-    memset(server_request + 1, '\0', strlen(client_name + 1)); 
-    memcpy(server_request + 1, client_name, strlen(client_name) + 1);
-    memset(server_request + 1 + strlen(client_name), '\0', strlen(box) + 1);
-    memcpy(server_request + 1 + strlen(client_name), box, strlen(box) + 1);
+    memset(server_request + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
+    memcpy(server_request + 1, client_pipe, strlen(client_pipe) * sizeof(char));
+    memset(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), '\0', BOX_NAME * sizeof(char));
+    memcpy(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), box, strlen(box) * sizeof(char));
 
     for(int i=0; i< BOX_NAME; i++){
         if (strcmp(boxes[i].box_name, box) != 0){
@@ -50,7 +50,7 @@ int send_sub_request(int server_pipe, char* client_name, char* box){
 	}
 
 
-    int c_pipe = open(client_name, O_RDONLY);
+    int c_pipe = open(client_pipe, O_RDONLY);
     int response;
     if (read(c_pipe, &response, sizeof(response)) == -1 || errno == EPIPE){
         fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
