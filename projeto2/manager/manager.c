@@ -213,7 +213,7 @@ int main(int argc, char **argv) {
 	}
 
     // check what command we need to do
-    if (strcmp(type_command, "create")){
+    if (strncmp(type_command, "create", strlen(type_command))){
         send_request_create_box(server_pipe, pipe_name, box_name);
     }
 
