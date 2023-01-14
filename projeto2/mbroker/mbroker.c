@@ -10,6 +10,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <signal.h>
 #include <producer-consumer.h>
 #include "../utils/common.h"
 #include "logging.h"
@@ -36,11 +37,17 @@ pthread_cond_t wait_messages_cond;
 pc_queue_t *queue;
 
 
+static void mbroker_exit(int sig) {
+    if (sig == SIGINT) {
+        fprintf(stdout, "\nExited Mbroker safely");
+        return; // Resume execution at point of interruption
+    }
+}
+
 /* Auxiliary functions for sorting the boxes*/
 static int myCompare(const void* a, const void* b){
   return strcmp(((Box *)a)->box_name, ((Box *)b)->box_name);
 }
-
 
 /*
  * Reads (and guarantees that it reads correctly) a given number of bytes
@@ -544,6 +551,17 @@ int main(int argc, char **argv) {
                 }
             }
         }
+
+        if (signal(SIGINT, mbroker_exit) == SIG_ERR){
+            pcq_destroy(&queue);
+            free(queue);
+            free(container);
+            
+            close(server_pipe);
+            tfs_unlink(pipe_name);
+            exit(EXIT_SUCCESS);
+        }
+
     }
     close(server_pipe);
     tfs_unlink(pipe_name);
