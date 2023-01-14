@@ -23,13 +23,13 @@ static void print_usage() {
 }
 
 int send_request_create_box(char* server_name, char* client_name, char* box){
-    char server_request[sizeof(uint8_t) + strlen(server_name) + strlen(box) + 2];
+    char server_request[sizeof(uint8_t) + strlen(client_name) + strlen(box) + 2];
     uint8_t op_code = CREATE_BOX_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
-    memset(server_request + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
-    memcpy(server_request + 1, client_name, strlen(client_name) * sizeof(char));
-    memset(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), '\0', BOX_NAME * sizeof(char));
-    memcpy(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), box, strlen(box) * sizeof(char));
+    memset(server_request + 1, '\0', strlen(client_name) + 1); 
+    memcpy(server_request + 1, client_name, strlen(client_name) + 1);
+    memset(server_request + 1 + strlen(client_name), '\0', strlen(box) + 1);
+    memcpy(server_request + 1 + strlen(client_name), box, strlen(box) + 1);
 
     if ((server_pipe = open(server_name, O_WRONLY)) == -1) {
 		return -1;
@@ -69,13 +69,13 @@ int send_request_create_box(char* server_name, char* client_name, char* box){
 }
 
 int send_request_remove_box(char* server_name, char* client_name, char* box){
-    char server_request[sizeof(uint8_t) + strlen(server_name) + strlen(box) + 2];
+    char server_request[sizeof(uint8_t) + strlen(client_name) + strlen(box) + 2];
     uint8_t op_code = REMOVE_BOX_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
-    memset(server_request + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
-    memcpy(server_request + 1, client_name, strlen(client_name) * sizeof(char));
-    memset(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), '\0', BOX_NAME * sizeof(char));
-    memcpy(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), box, strlen(box) * sizeof(char));
+    memset(server_request + 1, '\0', strlen(client_name) + 1); 
+    memcpy(server_request + 1, client_name, strlen(client_name) + 1);
+    memset(server_request + 1 + strlen(client_name), '\0', strlen(box) + 1);
+    memcpy(server_request + 1 + strlen(client_name), box, strlen(box) + 1);
 
     if ((server_pipe = open(server_name, O_WRONLY)) == -1) {
 		return -1;
@@ -115,11 +115,11 @@ int send_request_remove_box(char* server_name, char* client_name, char* box){
 }
 
 int send_request_list_box(char* server_name, char* client_name){
-    char server_request[sizeof(uint8_t) + MAX_CLIENT_NAME * sizeof(char)];
+    char server_request[sizeof(uint8_t) + strlen(client_name) + 1];
     uint8_t op_code = LIST_BOXES_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
-    memset(server_request + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
-    memcpy(server_request + 1, client_name, strlen(client_name) * sizeof(char));
+    memset(server_request + 1, '\0', strlen(client_name) + 1);
+    memcpy(server_request + 1, client_name, strlen(client_name) + 1);
 
     if ((server_pipe = open(server_name, O_WRONLY)) == -1) {
 		return -1;
