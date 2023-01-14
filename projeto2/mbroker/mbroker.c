@@ -495,18 +495,18 @@ void *thread_function(void *session){
 }
 
 
-int init_threads(Session *sessions) {
+int init_threads() {
     for (uint32_t i=0; i < max_sessions; i++){
-        sessions[i].is_free = true;
-       	if (pthread_mutex_init(&sessions[i].lock, NULL) == -1) {
+        container[i].is_free = true;
+       	if (pthread_mutex_init(&container[i].lock, NULL) == -1) {
 			return -1;
 		}
 
-        if (pthread_cond_init(&sessions[i].flag, NULL) == -1){
+        if (pthread_cond_init(&container[i].flag, NULL) == -1){
             return -1;
         }
 
-        if (pthread_create(&sessions[i].thread, NULL, thread_function, (void *) sessions+i) != 0) {
+        if (pthread_create(&container[i].thread, NULL, thread_function, (void *) &container[i]) != 0) {
             fprintf(stderr, "[ERR]: couldn't create threads: %s\n", strerror(errno));
 			return -1;
 		}
@@ -557,7 +557,7 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    init_threads(container);
+    init_threads();
 
     while(true){
         char buffer[MAX_REQUEST_SIZE];
