@@ -79,9 +79,9 @@ void send_message_to_box(Session *session){
         ssize_t ret = read(pipe, buffer, MAX_REQUEST_SIZE);
 
         if (ret > 0){
-            char msg[strlen(buffer)];
+            char msg[MESSAGE_SIZE];
             memset(msg, '\0', strlen(msg));
-            memcpy(msg, buffer + sizeof(uint8_t) , strlen(buffer) - 1);
+            memcpy(msg, buffer + sizeof(uint8_t) , MESSAGE_SIZE * sizeof(char));
 
             int box = tfs_open(session->box_name, TFS_O_APPEND);
             if (box == -1){
@@ -132,11 +132,11 @@ void read_box(Session* session){
 
         buffer[ret] = 0;
 
-        char buffer_with_op_code[sizeof(uint8_t) + strlen(buffer) + 1];
+        char buffer_with_op_code[sizeof(uint8_t) + MESSAGE_SIZE];
         uint8_t op_code = SEND_MESSAGE; 
         memcpy(buffer_with_op_code, &op_code, sizeof(uint8_t));
-        memset(buffer_with_op_code + 1, '\0', strlen(buffer) + 1);
-        memcpy(buffer_with_op_code + 1, buffer, strlen(buffer) + 1);
+        memset(buffer_with_op_code + 1, '\0', MESSAGE_SIZE * sizeof(char));
+        memcpy(buffer_with_op_code + 1, buffer, strlen(buffer) * sizeof(char));
 
         if (write(sub_pipe, buffer_with_op_code, strlen(buffer)) == -1){
             // erro
@@ -144,7 +144,6 @@ void read_box(Session* session){
             exit(EXIT_FAILURE);
         }
 
-        // refreshes the buffers
         memset(buffer, 0, strlen(buffer));
         memset(buffer_with_op_code, 0, strlen(buffer_with_op_code));
     }
@@ -262,11 +261,11 @@ void case_create_box(Session* session){
             ret = -1; 
             strcpy(error_message, "There is already a box with this name.\n");
 
-            char response[sizeof(uint8_t) + sizeof(int32_t) + strlen(error_message) + 1];
+            char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
             memcpy(response, &op_code, sizeof(uint8_t));
             memcpy(response + 1, &ret, sizeof(int32_t));
-            memset(response + 2, '\0', strlen(error_message) + 1);
-            memcpy(response + 2, error_message, strlen(error_message) + 1);
+            memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
+            memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
             
             if (write(client_pipe, response, strlen(response)) > 0){
                 close(client_pipe);
@@ -299,11 +298,11 @@ void case_create_box(Session* session){
     }
 
     if (ret == -1){
-        char response[sizeof(uint8_t) + sizeof(int32_t) + strlen(error_message) + 1];
+        char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
         memcpy(response, &op_code, sizeof(uint8_t));
         memcpy(response + 1, &ret, sizeof(int32_t));
-        memset(response + 2, '\0', strlen(error_message) + 1);
-        memcpy(response + 2, error_message, strlen(error_message) + 1);
+        memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
+        memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
         
         if (write(client_pipe, response, strlen(response)) > 0){
             close(client_pipe);
@@ -311,10 +310,11 @@ void case_create_box(Session* session){
         close(client_pipe);
     }
     else {   
-        char response[sizeof(uint8_t) + sizeof(int32_t) + 1];
+        char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
         memcpy(response, &op_code, sizeof(uint8_t));
         memcpy(response + 1, &ret, sizeof(int32_t));
-        memset(response + 2, '\0', 1);
+        memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
+        memcpy(response + 2, "\0", strlen(error_message) * sizeof(char));
         // preencer o campo do error message com \0
 
         if (write(client_pipe, response, strlen(response)) > 0){
@@ -347,11 +347,11 @@ void case_remove_box(Session* session){
     if (ret == -1){
         strcpy(error_message, "There isn't a box with the specified box name.\n");
 
-        char response[sizeof(uint8_t) + sizeof(int32_t) + strlen(error_message) + 1];
+        char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
         memcpy(response, &op_code, sizeof(uint8_t));
         memcpy(response + 1, &ret, sizeof(int32_t));
-        memset(response + 2, '\0', strlen(error_message) + 1);
-        memcpy(response + 2, error_message, strlen(error_message) + 1);
+        memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
+        memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
         
         if (write(client_pipe, response, strlen(response)) > 0){
             close(client_pipe);
@@ -392,21 +392,21 @@ void case_remove_box(Session* session){
     }
 
     if (ret == -1){
-        char response[sizeof(uint8_t) + sizeof(int32_t) + strlen(error_message) + 1];
+        char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
         memcpy(response, &op_code, sizeof(uint8_t));
         memcpy(response + 1, &ret, sizeof(int32_t));
-        memset(response + 2, '\0', strlen(error_message) + 1);
-        memcpy(response + 2, error_message, strlen(error_message) + 1);
+        memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
+        memcpy(response + 2, error_message, strlen(error_message) * sizeof(char));
         
         if (write(client_pipe, response, strlen(response)) > 0){
             close(client_pipe);
         }
     }
     else {   
-        char response[sizeof(uint8_t) + sizeof(int32_t) + 1];
+        char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
         memcpy(response, &op_code, sizeof(uint8_t));
         memcpy(response + 1, &ret, sizeof(int32_t));
-        memset(response + 2, '\0', 1);
+        memcpy(response + 2, "\0", sizeof(char));
         // preencer o campo do error message com \0
 
         if (write(client_pipe, response, strlen(response)) > 0){
@@ -423,12 +423,11 @@ void case_list_box(Session* session){
     client_pipe = open(client_name, O_WRONLY);
 
     if(box_count == 0){
-        uint8_t last = 1;
+        uint8_t i = 1;
         char response[sizeof(uint8_t) + sizeof(uint8_t) + BOX_NAME * sizeof(char)];
         memcpy(response, &op_code, sizeof(uint8_t));
-        memcpy(response + 1, &last, sizeof(uint8_t));
+        memcpy(response + 1, &i, 1 * sizeof(uint8_t));
         memset(response + 2, '\0', BOX_NAME * sizeof(char));
-        // assim fica preenchida toda com '\0'
 
         if (write(client_pipe, &response, sizeof(response)) > 0) {
 		    close(client_pipe);
@@ -441,9 +440,9 @@ void case_list_box(Session* session){
         
         for(int i=0; i < box_count; i++){
             memcpy(response, &op_code, sizeof(uint8_t));
-            memcpy(response + 1, &boxes[i].last, sizeof(uint8_t));
+            memcpy(response + 1, &boxes[i].last, 1 * sizeof(uint8_t));
             memset(response + 2, '\0', BOX_NAME * sizeof(char));
-            memcpy(response + 2, boxes[i].box_name, strlen(boxes[i].box_name) + 1);
+            memcpy(response + 2, boxes[i].box_name, strlen(boxes[i].box_name) * sizeof(char));
             memcpy(response + 2 + BOX_NAME, &boxes[i].box_size, sizeof(uint64_t));
             memcpy(response + 2 + BOX_NAME + sizeof(uint64_t), &boxes[i].num_publishers, sizeof(uint64_t));
             memcpy(response + 2 + BOX_NAME + sizeof(uint64_t) + sizeof(uint64_t), &boxes[i].num_subscribers, sizeof(uint64_t));
@@ -452,8 +451,7 @@ void case_list_box(Session* session){
 		        close(client_pipe);
 	        }
 
-            // resets the buffer
-            memset(response, 0, strlen(response));
+            //memset(response, 0, strlen(response));
         }
     }
 }
