@@ -10,7 +10,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include "../utils/common.h"
-#include "logging.h"
+#include "../utils/logging.h"
 
 static void print_usage() {
     fprintf(stderr, "usage: \n"

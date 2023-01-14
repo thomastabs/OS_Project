@@ -1,6 +1,3 @@
-#include "../utils/logging.h"
-#include "../utils/common.h"
-#include "../fs/operations.h"
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -12,6 +9,9 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include "../utils/logging.h"
+#include "../utils/common.h"
+#include "../fs/operations.h"
 
 #define MAX_PIPE_NAME 256
 #define MAX_BOX_NAME 32
