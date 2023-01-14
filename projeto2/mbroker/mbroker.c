@@ -433,6 +433,7 @@ void case_list_box(Session* session){
 		    close(client_pipe);
 	    }
     }
+    // big goofy
     else {
         qsort(boxes, box_count, sizeof(Box), myCompare); //sort the boxes
         char response[sizeof(uint8_t) + sizeof(uint8_t) + BOX_NAME * sizeof(char) 
