@@ -39,7 +39,7 @@ int send_sub_request(int server_pipe, char* client_pipe, char* box){
         break;
     }
 
-    if (flag = 1){
+    if (flag == 1){
         return -1;
     }
 
