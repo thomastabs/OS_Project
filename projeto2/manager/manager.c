@@ -10,7 +10,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include "../utils/common.h"
-#include "logging.h"
+#include "../utils/logging.h"
 
 int client_pipe;
 int server_pipe;
