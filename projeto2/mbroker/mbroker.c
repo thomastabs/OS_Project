@@ -111,7 +111,7 @@ void read_box(Session* session){
         //erro
     }
 
-    // will print the initial state of the content in 
+    // will send to sub pipe the initial state of the content in 
     while (true) {
         char buffer[MESSAGE_SIZE];
         ssize_t ret = tfs_read(box, buffer, MESSAGE_SIZE - 1);
@@ -132,11 +132,20 @@ void read_box(Session* session){
 
         buffer[ret] = 0;
 
-        if (write(sub_pipe, buffer, strlen(buffer)) == -1){
+        char buffer_with_op_code[sizeof(uint8_t) + MESSAGE_SIZE];
+        uint8_t op_code = SEND_MESSAGE; 
+        memcpy(buffer_with_op_code, &op_code, sizeof(uint8_t));
+        memset(buffer_with_op_code + 1, '\0', MESSAGE_SIZE * sizeof(char));
+        memcpy(buffer_with_op_code + 1, buffer, strlen(buffer) * sizeof(char));
+
+        if (write(sub_pipe, buffer_with_op_code, strlen(buffer)) == -1){
             // erro
             close(sub_pipe);
             exit(EXIT_FAILURE);
         }
+
+        memset(buffer, 0, strlen(buffer));
+        memset(buffer_with_op_code, 0, strlen(buffer_with_op_code));
     }
 }
 
@@ -553,7 +562,7 @@ int main(int argc, char **argv) {
         }
 
         if (signal(SIGINT, mbroker_exit) == SIG_ERR){
-            pcq_destroy(&queue);
+            pcq_destroy(queue);
             free(queue);
             free(container);
             
