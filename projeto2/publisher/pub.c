@@ -20,13 +20,13 @@
 // Helper function to send pub request
 int send_pub_request(int server_pipe, char* client_name, char* box) {
     int flag;
-    char server_request[sizeof(uint8_t) + MAX_CLIENT_NAME * sizeof(char) + BOX_NAME * sizeof(char)];
+    char server_request[sizeof(uint8_t) + strlen(client_name) + strlen(box) + 2];
     uint8_t op_code = PUB_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
-    memset(server_request + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
-    memcpy(server_request + 1, client_name, strlen(client_name) * sizeof(char));
-    memset(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), '\0', BOX_NAME * sizeof(char));
-    memcpy(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), box, strlen(box) * sizeof(char));
+    memset(server_request + 1, '\0', strlen(client_name) + 1); 
+    memcpy(server_request + 1, client_name, strlen(client_name) + 1);
+    memset(server_request + 1 + strlen(client_name), '\0', strlen(box) + 1);
+    memcpy(server_request + 1 + strlen(client_name), box, strlen(box) + 1);
 
     for(int i=0; i< BOX_NAME; i++){
         if (strcmp(boxes[i].box_name, box) != 0){
@@ -57,14 +57,12 @@ int send_pub_request(int server_pipe, char* client_name, char* box) {
     return response;
 }
 
-int send_pub_msg(int session_pipe, char *pub_pipename, char *msg){
-    char pub_msg[sizeof(uint8_t) +  MAX_MSG_SIZE * sizeof(char) + MAX_PIPE_NAME * sizeof(char)];
+int send_pub_msg(int session_pipe, char *msg){
+    char pub_msg[sizeof(uint8_t) +  strlen(msg) + 1];
     uint8_t op_code = SEND_MESSAGE;
     memcpy(pub_msg, &op_code, sizeof(uint8_t));
-    memset(pub_msg + 1, '\0', MAX_MSG_SIZE * sizeof(char));
-    memcpy(pub_msg + 1, msg, strlen(msg) * sizeof(char));
-    memset(pub_msg + 1 + MAX_MSG_SIZE, '\0', MAX_PIPE_NAME * sizeof(char));
-    memcpy(pub_msg + 1 + MAX_MSG_SIZE, pub_pipename, strlen(pub_pipename) * sizeof(char));
+    memset(pub_msg + 1, '\0', strlen(msg) + 1);
+    memcpy(pub_msg + 1, msg, strlen(msg) + 1);
 
     // write to the the client session pipe
     if (write(session_pipe, pub_msg, strlen(pub_msg)) == -1){
@@ -126,7 +124,7 @@ int main(int argc, char **argv) {
             }
 
             input[strcspn(input, "\n")] = 0;
-            if (send_pub_msg(session_pipe, pub_pipename, input) == -1){
+            if (send_pub_msg(session_pipe, input) == -1){
                 fprintf(stderr, "Writing went wrong.\n");
                 close(session_pipe);
                 unlink(pub_pipename);

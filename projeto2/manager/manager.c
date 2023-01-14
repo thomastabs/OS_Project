@@ -23,7 +23,7 @@ static void print_usage() {
 }
 
 int send_request_create_box(char* server_name, char* client_name, char* box){
-    char server_request[sizeof(uint8_t) + strlen(server_name) + strlen(box) + 2];
+    char server_request[sizeof(uint8_t) + strlen(client_name) + strlen(box) + 2];
     uint8_t op_code = CREATE_BOX_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
     memset(server_request + 1, '\0', strlen(client_name) + 1); 
@@ -69,7 +69,7 @@ int send_request_create_box(char* server_name, char* client_name, char* box){
 }
 
 int send_request_remove_box(char* server_name, char* client_name, char* box){
-    char server_request[sizeof(uint8_t) + strlen(server_name) + strlen(box) + 2];
+    char server_request[sizeof(uint8_t) + strlen(client_name) + strlen(box) + 2];
     uint8_t op_code = REMOVE_BOX_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
     memset(server_request + 1, '\0', strlen(client_name) + 1); 
