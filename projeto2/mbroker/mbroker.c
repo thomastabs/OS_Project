@@ -334,7 +334,7 @@ void case_remove_box(Session* session){
     memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
     memcpy(box_name, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
     client_pipe = open(client_name, O_WRONLY);
-    for (int i=0; i < BOX_NAME; i++){
+    for (int i=0; i < box_count; i++){
         // lets check if we can find the box within the box list
         if (strcmp(box_name, boxes[i].box_name) != 0){
             ret = -1;
