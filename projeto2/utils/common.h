@@ -1,5 +1,18 @@
 #include<stdlib.h>
 #include<stdint.h>
+#include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <pthread.h>
+
 
 #ifndef COMMON_H
 #define COMMON_H
@@ -29,6 +42,15 @@ enum {
     RECEIVE_MESSAGE = 10
 };
 
+typedef struct {   
+    bool is_free;
+    char *box_name;
+    uint8_t last;
+    uint64_t box_size;
+    uint64_t num_publishers;
+    uint64_t num_subscribers;
+} Box;
 
+Box boxes[BOX_NAME];
 
 #endif

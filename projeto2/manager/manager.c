@@ -184,7 +184,12 @@ int main(int argc, char **argv) {
     char *box_name = argv[4];
 
     // check if we can create or remove a message box with the commands given 
-    if ((strcmp(type_command, "create") || strcmp(type_command, "remove")) && argc == 4){
+    if ((strcmp(type_command, "create") == 0 || strcmp(type_command, "remove") == 0) && argc == 4){
+        print_usage();
+        return -1;
+    }
+
+    if (strcmp(type_command, "list") == 0 && argc == 5){
         print_usage();
         return -1;
     }

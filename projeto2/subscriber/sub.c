@@ -131,6 +131,13 @@ int main(int argc, char **argv) {
             fprintf(stdout, "%s\n", buffer);
 
             if (signal(SIGINT, sig_handler) == SIG_ERR) {
+                for(int i = 0; i< BOX_NAME; i++){
+                    if (strcmp(boxes[i].box_name,box_name) == 0){
+                        boxes[i].num_subscribers--;
+                        break;
+                    }
+                }
+                fprintf("%d messages have been read", new_msgs_read);
                 close(sub_pipe);
                 unlink(sub_pipename);
                 exit(EXIT_SUCCESS);

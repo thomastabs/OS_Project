@@ -29,19 +29,8 @@ typedef struct {
     pthread_t thread;
 } Session;
 
-typedef struct 
-{   
-    bool is_free;
-    char *box_name;
-    uint8_t last;
-    uint64_t box_size;
-    uint64_t num_publishers;
-    uint64_t num_subscribers;
-} Box;
-
 uint32_t max_sessions = 0;
 Session *container; // where we are going to keep the list of sessions so that it can be used in other functions
-Box boxes[BOX_NAME];
 size_t box_count = 0;
 pthread_cond_t wait_messages_cond;
 pc_queue_t *queue;
@@ -166,6 +155,7 @@ void case_pub_request(Session* session){
             session->pipe = pipe;
             session->pipe_name = client_name;
             session->box_name = box;
+            boxes[i].num_publishers++;
            
             send_message_to_box(session);
             close(pipe);
@@ -195,6 +185,7 @@ void case_sub_request(Session* session){
                 session->pipe = pipe;
                 session->pipe_name = client_name;
                 session->box_name = box;
+                boxes[i].num_subscribers++;
                 
                 read_box(session);
                 //ok faz o q temn a fzr do resto do sub
@@ -321,6 +312,16 @@ void case_remove_box(Session* session){
         strcpy(error_message, "Couldnt delete the specified box.\n");
     }
     else {
+        for (int i=0; i < max_sessions; i++){
+            if(strcmp(container[i].box_name, box_name) == 0){
+                close(container[i].pipe);
+                unlink(container[i].pipe_name);
+                container[i].type = -1;
+                container[i].pipe = 0;
+                container[i].pipe_name = NULL;
+                container[i].box_name = NULL;
+            }
+        }
         for (int i=0; i < BOX_NAME; i++){
             if(strcmp(boxes[i].box_name, box_name)){
                 strcpy(boxes[i].box_name, box_name);

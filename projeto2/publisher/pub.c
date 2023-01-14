@@ -125,6 +125,12 @@ int main(int argc, char **argv) {
 	    }
 
         // when the EOF is pressed with the Crtl D, then the session pipe will be closed
+        for(int i = 0; i< BOX_NAME; i++){
+            if (strcmp(boxes[i].box_name,box_name) == 0){
+                boxes[i].num_publishers--;
+                break;
+            }
+        }
         fprintf(stderr, "[INFO]: closing session pipe\n");
         close(session_pipe); 
         unlink(pub_pipename);
