@@ -70,8 +70,7 @@ char* read_buffer(int rx, char *buf, size_t to_read) {
         **/
     }
     // now we will separate the client path from the box
-    strtok(buf + 1, "|");
-    return (buf + 1);
+    return (buf);
 }
 
 void send_message_to_box(Session *session){
@@ -595,16 +594,19 @@ int main(int argc, char **argv) {
                 if(container[i].pipe_name == NULL){
                     current_session = &container[i];
                     memcpy(buffer, &op_code, sizeof(char));
-                    memset(client_name, '\0', MAX_CLIENT_NAME);
                     
-                    strcpy(client_name, read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME + BOX_NAME));
+                    strcpy(buffer2, read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME + BOX_NAME));
+                    strcpy(client_name, strtok(buffer2 + 1, "|"));
+
                     current_session->pipe_name = client_name;
                     current_session->is_free = false;
 
+                    /**
                     memset(buffer2, '\0', strlen(buffer2));
                     memcpy(buffer2, &op_code, sizeof(uint8_t));
                     memset(buffer2 + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
                     memcpy(buffer2 + 1, client_name, strlen(client_name) * sizeof(char));
+                    **/
                     
                     //aqui sabese la pq so entra uma string com o opcode colado
                     //ao client path name, era por isso q nao entrava
@@ -615,7 +617,7 @@ int main(int argc, char **argv) {
                     // massss aconselhava te a mudar os memcpys restantes das outras funcoes e
                     // continuar o debugging!!!! guia te pela sequencia de memcpys q fiz no manager
                     // , na funcao do registo, esse sera o formato a partir de agr
-                    pcq_enqueue(queue, buffer2); 
+                    pcq_enqueue(queue, buffer); // "\003|../manager1|box"
                     pthread_cond_signal(&current_session->flag);
                     break;
                 }
