@@ -23,14 +23,17 @@ int new_msgs_read = 0; // for the new messages read within the session pipe
 
 int send_sub_request(int server_pipe, char* client_pipe, char* box){
     int flag;
-    char server_request[sizeof(uint8_t) + MAX_CLIENT_NAME * sizeof(char) + BOX_NAME * sizeof(char)];
+    char server_request[sizeof(uint8_t) + 2 + MAX_CLIENT_NAME * sizeof(char) + BOX_NAME * sizeof(char)];
     uint8_t op_code = SUB_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
-    memset(server_request + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
-    memcpy(server_request + 1, client_pipe, strlen(client_pipe) * sizeof(char));
-    memset(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), '\0', BOX_NAME * sizeof(char));
-    memcpy(server_request + 1 + MAX_CLIENT_NAME * sizeof(char), box, strlen(box) * sizeof(char));
 
+    memset(server_request + 1, '|', sizeof(char));
+    memset(server_request + 2, '\0', MAX_CLIENT_NAME * sizeof(char));
+    memcpy(server_request + 2, client_pipe, strlen(client_pipe) * sizeof(char));
+
+    memset(server_request + 2 + strlen(client_pipe), '|', sizeof(char));
+    memset(server_request + 3 + strlen(client_pipe), '\0', BOX_NAME * sizeof(char));
+    memcpy(server_request + 3 + strlen(client_pipe), box, strlen(box) * sizeof(char));
     for(int i=0; i< BOX_NAME; i++){
         if (strcmp(boxes[i].box_name, box) != 0){
             flag = 1;

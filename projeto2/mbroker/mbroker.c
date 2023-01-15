@@ -161,8 +161,8 @@ void case_pub_request(Session* session){
     char client_name[MAX_CLIENT_NAME];
     char box[BOX_NAME];
     int pipe;
-    memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
-    memcpy(box, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
+    memcpy(client_name, session->buffer + 2, MAX_CLIENT_NAME);
+    memcpy(box, session->buffer + 3 + strlen(client_name), BOX_NAME);
     pipe = open(client_name, O_WRONLY);
 
     for(uint32_t i=0; i< max_sessions; i++){
@@ -209,8 +209,8 @@ void case_sub_request(Session* session){
     char client_name[MAX_CLIENT_NAME];
     char box[BOX_NAME];
     int pipe;
-    memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
-    memcpy(box, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
+    memcpy(client_name, session->buffer + 2, MAX_CLIENT_NAME);
+    memcpy(box, session->buffer + 3 + strlen(client_name), BOX_NAME);
     pipe = open(client_name, O_WRONLY);
     if (session->type != PUB && session->type != SUB){
         for(uint32_t i=0; i< max_sessions; i++){
@@ -259,8 +259,8 @@ void case_create_box(Session* session){
     char client_name[MAX_CLIENT_NAME];
     char box_name[BOX_NAME];
     uint8_t op_code = CREATE_BOX_ANSWER;
-    memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
-    memcpy(box_name, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
+    memcpy(client_name, session->buffer + 2, MAX_CLIENT_NAME);
+    memcpy(box_name, session->buffer + 3 + strlen(client_name), BOX_NAME);
     client_pipe = open(client_name, O_WRONLY);
     for (int i=0; i < box_count; i++){
         // lets check if there is any box with the same name 
@@ -338,8 +338,8 @@ void case_remove_box(Session* session){
     char client_name[MAX_CLIENT_NAME];
     char box_name[BOX_NAME];
     uint8_t op_code = REMOVE_BOX_ANSWER;
-    memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
-    memcpy(box_name, session->buffer + 1 + MAX_CLIENT_NAME, BOX_NAME);
+    memcpy(client_name, session->buffer + 2, MAX_CLIENT_NAME);
+    memcpy(box_name, session->buffer + 3 + strlen(client_name), BOX_NAME);
     client_pipe = open(client_name, O_WRONLY);
     for (int i=0; i < box_count; i++){
         // lets check if we can find the box within the box list
@@ -426,7 +426,7 @@ void case_list_box(Session* session){
     int client_pipe;
     char client_name[MAX_CLIENT_NAME];
     uint8_t op_code = LIST_BOXES_ANSWER;
-    memcpy(client_name, session->buffer + 1, MAX_CLIENT_NAME);
+    memcpy(client_name, session->buffer + 2, MAX_CLIENT_NAME);
     client_pipe = open(client_name, O_WRONLY);
 
     if(box_count == 0){
@@ -451,9 +451,9 @@ void case_list_box(Session* session){
             memcpy(response + 1, &boxes[i].last, 1 * sizeof(uint8_t));
             memset(response + 2, '\0', BOX_NAME * sizeof(char));
             memcpy(response + 2, boxes[i].box_name, strlen(boxes[i].box_name) * sizeof(char));
-            memcpy(response + 2 + BOX_NAME, &boxes[i].box_size, sizeof(uint64_t));
-            memcpy(response + 2 + BOX_NAME + sizeof(uint64_t), &boxes[i].num_publishers, sizeof(uint64_t));
-            memcpy(response + 2 + BOX_NAME + sizeof(uint64_t) + sizeof(uint64_t), &boxes[i].num_subscribers, sizeof(uint64_t));
+            memcpy(response + 2 + strlen(boxes[i].box_name), &boxes[i].box_size, sizeof(uint64_t));
+            memcpy(response + 2 + strlen(boxes[i].box_name) + sizeof(uint64_t), &boxes[i].num_publishers, sizeof(uint64_t));
+            memcpy(response + 2 + strlen(boxes[i].box_name) + sizeof(uint64_t) + sizeof(uint64_t), &boxes[i].num_subscribers, sizeof(uint64_t));
 
             if (write(client_pipe, &response, sizeof(response)) > 0) {
 		        close(client_pipe);
@@ -585,7 +585,7 @@ int main(int argc, char **argv) {
                     current_session->pipe_name = client_name;
                    
                     pcq_enqueue(queue, buffer);
-                    pthread_cond_signal(&current_session->flag);
+                    pthread_cond_signal(&current_session->flag);  
                     break;
                 }
             }
