@@ -23,10 +23,10 @@
 
 /* 
     maximum size that a request can have
-    in this project, the maximum request size will be 1030
+    in this project, the maximum request size will be 1300
     (situation where the client sends and recieves messages)
  */
-#define MAX_REQUEST_SIZE (1300)
+#define MAX_REQUEST_SIZE (1312)
 
 /* operation codes (for client-server requests) */
 enum {

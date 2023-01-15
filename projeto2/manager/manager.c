@@ -25,6 +25,9 @@ static void print_usage() {
 int send_request_create_box(char* server_name, char* client_name, char* box){
     char server_request[sizeof(uint8_t) + 2 + MAX_CLIENT_NAME * sizeof(char) + BOX_NAME * sizeof(char)];
     uint8_t op_code = CREATE_BOX_REQUEST; 
+    
+    // this saves the following arguments in a certain type of format
+    // an example is: '\003|../manager1|boxx'
     memcpy(server_request, &op_code, sizeof(uint8_t));
 
     memset(server_request + 1, '|', sizeof(char));
@@ -35,15 +38,19 @@ int send_request_create_box(char* server_name, char* client_name, char* box){
     memset(server_request + 3 + strlen(client_name), '\0', BOX_NAME * sizeof(char));
     memcpy(server_request + 3 + strlen(client_name), box, strlen(box) * sizeof(char));
 
+    // then we open the server pipe for writing the request
     if ((server_pipe = open(server_name, O_WRONLY)) == -1) {
 		return -1;
 	}
+
     /* Send request to server */
 	if (write(server_pipe, &server_request, sizeof(server_request)) > 0) {
 		close(server_pipe);
 	}
-    else 
+    else {
+        close(server_pipe);
         return -1;
+    }
 
     /* Receives answer */
     char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
@@ -51,7 +58,7 @@ int send_request_create_box(char* server_name, char* client_name, char* box){
 		return -1;
 	}
 
-
+    // reads if the answer on the client pipe
     if (read(client_pipe, &response, sizeof(response)) == -1){
         close(client_pipe);
         return -1;
@@ -68,6 +75,7 @@ int send_request_create_box(char* server_name, char* client_name, char* box){
         fprintf(stdout,"ERROR %.*s\n", 1024, response + 5); //error_message
         return -1;
     }
+    // and if yes an 'OK' message is sent to the stdout 
     fprintf(stdout, "OK\n");
     return 0;
 }
@@ -77,6 +85,8 @@ int send_request_remove_box(char* server_name, char* client_name, char* box){
     uint8_t op_code = REMOVE_BOX_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
 
+    // this saves the following arguments in a certain type of format
+    // an example is: '\003|../manager1|boxx'
     memset(server_request + 1, '|', sizeof(char));
     memset(server_request + 2, '\0', MAX_CLIENT_NAME * sizeof(char));
     memcpy(server_request + 2, client_name, strlen(client_name) * sizeof(char));
@@ -93,8 +103,10 @@ int send_request_remove_box(char* server_name, char* client_name, char* box){
 	if (write(server_pipe, &server_request, sizeof(server_request)) > 0) {
 		close(server_pipe);
 	}
-    else 
+    else {
+        close(server_pipe);
         return -1;
+    }
 
     /* Receives answer */
     char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
@@ -124,11 +136,15 @@ int send_request_remove_box(char* server_name, char* client_name, char* box){
 
 int send_request_list_box(char* server_name, char* client_name){
     char server_request[sizeof(uint8_t) + 1 + MAX_CLIENT_NAME * sizeof(char)];
-    uint8_t op_code = LIST_BOXES_REQUEST; 
+    uint8_t op_code = LIST_BOXES_REQUEST;
+
+    // lets create the format for the server request
+    // in which consists in the fusion of the op_code and the client name 
     memcpy(server_request, &op_code, sizeof(uint8_t));
     memset(server_request + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
     memcpy(server_request + 1, client_name, strlen(client_name) * sizeof(char));
 
+    // opens the server pipe for writing the request
     if ((server_pipe = open(server_name, O_WRONLY)) == -1) {
 		return -1;
 	}
@@ -137,13 +153,17 @@ int send_request_list_box(char* server_name, char* client_name){
 	if (write(server_pipe, &server_request, sizeof(server_request)) > 0) {
 		close(server_pipe);
 	}
-    else 
+    else {
+        close(server_pipe);
         return -1;
+    }
+
     /* Receives answer */
     
-    //como esta resposta será de uma certa forma uma variável, iremos meter um pico (1030 neste caso)
+    // since this variable can switch its size quite often, we set its space with 1312
     char response[MAX_REQUEST_SIZE];
 
+    // then we open the client pipe for reading  
     if ((client_pipe = open(client_name, O_RDONLY)) == -1) {
 		return -1;
 	}
@@ -160,6 +180,8 @@ int send_request_list_box(char* server_name, char* client_name){
         fprintf(stdout, "NO BOXES FOUND\n");
         return -1;
     }
+
+    // then we print out every box depending on the bytes of every argument
     for(size_t i = 0; i < strlen(response); i+=58){
         fprintf(stdout, "%.1s %.32s %.8s %.8s %.8s\n", 
         response+i+1, 
@@ -173,15 +195,16 @@ int send_request_list_box(char* server_name, char* client_name){
 
 
 int main(int argc, char **argv) {
-    if(argc < 4){
-        print_usage();
-        return -1;
-    }
-
     char *server_name = argv[1];
     char *pipe_name = argv[2];
     char *type_command = argv[3];
     char *box_name = argv[4];
+
+    // checks if the number of arguments is correct 
+    if(argc < 4){
+        print_usage();
+        return -1;
+    }
 
     // check if we can create or remove a message box with the commands given 
     if ((strcmp(type_command, "create") == 0 || strcmp(type_command, "remove") == 0) && argc == 4){
@@ -189,6 +212,7 @@ int main(int argc, char **argv) {
         return -1;
     }
 
+    // this checks if there is an argument after the list command
     if (strcmp(type_command, "list") == 0 && argc == 5){
         print_usage();
         return -1;
@@ -220,6 +244,7 @@ int main(int argc, char **argv) {
         send_request_list_box(server_name, pipe_name);
     }
 
+    // then we unlink the manager pipe, because is no longer needed 
     unlink(pipe_name);
     return 0;
 }
