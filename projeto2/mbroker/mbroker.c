@@ -26,7 +26,6 @@ typedef struct {
     char buffer[MAX_REQUEST_SIZE];
     client_type type;
     pthread_mutex_t lock;
-    pthread_cond_t flag;
     pthread_t thread;
 } Session;
 
@@ -468,8 +467,6 @@ void *thread_function(void *session){
     uint8_t op_code;
 
     while(true){
-        pthread_cond_wait(&actual_session->flag, &actual_session->lock);
-        
         char* request = (char *) pcq_dequeue(queue);
         memcpy(&actual_session->buffer, request, MAX_REQUEST_SIZE);
         actual_session->is_free = false;
@@ -505,10 +502,6 @@ int init_threads() {
        	if (pthread_mutex_init(&container[i].lock, NULL) == -1) {
 			return -1;
 		}
-
-        if (pthread_cond_init(&container[i].flag, NULL) == -1){
-            return -1;
-        }
 
         if (pthread_create(&container[i].thread, NULL, &thread_function, (void *) &container[i]) != 0) {
             fprintf(stderr, "[ERR]: couldn't create threads: %s\n", strerror(errno));
@@ -583,7 +576,6 @@ int main(int argc, char **argv) {
                     current_session->pipe_name = client_name;
                    
                     pcq_enqueue(queue, buffer);
-                    pthread_cond_signal(&current_session->flag);  
                     break;
                 }
             }
@@ -592,7 +584,6 @@ int main(int argc, char **argv) {
             for (int i = 0; i < max_sessions; i++){
                 if(container[i].pipe_name == NULL){
                     current_session = &container[i];
-                    pthread_mutex_lock(&current_session->lock);
                     memcpy(buffer, &op_code, sizeof(char));
                     
                     strcpy(buffer2, read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME + BOX_NAME));
@@ -603,9 +594,8 @@ int main(int argc, char **argv) {
                     
                     char string[strlen(buffer)];
                     memcpy(string, buffer, strlen(buffer));
-                    pcq_enqueue(queue, string); // "\003|../manager1|box"
-                    pthread_cond_signal(&current_session->flag);
-                    pthread_mutex_unlock(&current_session->lock);
+                    pcq_enqueue(queue, (void *) string); // "\003|../manager1|box"
+                    pthread_cond_signal(&queue->pcq_pusher_condvar);
                     break;
                 }
             }
