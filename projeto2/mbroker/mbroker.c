@@ -19,31 +19,33 @@
 typedef enum { PUB, SUB } client_type;
 
 typedef struct {
-    char *pipe_name;
-    char *box_name; 
-    int pipe;
-    bool is_free;
-    char buffer[MAX_REQUEST_SIZE];
-    client_type type;
-    pthread_mutex_t lock;
-    pthread_t thread;
+    char *pipe_name;                    // pipe name associated with the client
+    char *box_name;                     // box name associated with it
+    int pipe;                           // file descriptor of the pipe
+    bool is_free;                       // boolean to help check if its free
+    char buffer[MAX_REQUEST_SIZE];      // the buffer associated with the request
+    client_type type;                   // the client type
+    pthread_mutex_t lock;               // the mutex lock behind the session
+    pthread_t thread;                   // and then the thread itself
 } Session;
 
-uint32_t max_sessions = 0;
-Session *container; // where we are going to keep the list of sessions so that it can be used in other functions
-size_t box_count = 0;
-pthread_cond_t wait_messages_cond;
-pc_queue_t *queue;
+uint32_t max_sessions = 0;  // corresponding to the number of threads
+Session *container;         // where we are going to keep the list of 
+                            // sessions so that it can be used in other functions
+size_t box_count = 0;                   // number of boxes within our custom container
+pthread_cond_t wait_messages_cond;      // condition variable for messages
+pc_queue_t *queue;                      // the pointer responsible for the queue in the 
+                                        // producer-consumer files
 
 
+// this is the signal handler for safely exiting Mbroker using Ctrl C
 static void mbroker_exit(int sig) {
     if (sig == SIGINT) {
-        fprintf(stdout, "\nExited Mbroker safely");
         return; // Resume execution at point of interruption
     }
 }
 
-/* Auxiliary functions for sorting the boxes*/
+/* Auxiliary function for sorting the boxes*/
 static int myCompare(const void* a, const void* b){
   return strcmp(((Box *)a)->box_name, ((Box *)b)->box_name);
 }
@@ -62,26 +64,25 @@ char* read_buffer(int rx, char *buf, size_t to_read) {
             exit(EXIT_FAILURE);
         }
         read_so_far += (size_t) ret;
-        /**
-        if (read_so_far >= strlen(buf)){
-            return 0;
-        }
-        **/
     }
-    // now we will separate the client path from the box
     return (buf);
 }
 
+// this function is responsible for opening a pipe, and sending the 
+// messages within to the respective box_name
 void send_message_to_box(Session *session){
     int pipe;
     pipe = open(session->pipe_name, O_RDONLY);
     if (pipe == -1){
-        // erro
+        fprintf(stdout, "Session pipe doesn't exist.\n");
+        exit(EXIT_FAILURE);
     }
 
     while (true){
         char buffer[MAX_REQUEST_SIZE];
         ssize_t ret = read(pipe, buffer, MAX_REQUEST_SIZE);
+        // this saves the message within the pipe into a buffer
+        // which will write inside the respective box
 
         if (ret > 0){
             char msg[MESSAGE_SIZE];
@@ -90,42 +91,52 @@ void send_message_to_box(Session *session){
 
             int box = tfs_open(session->box_name, TFS_O_APPEND);
             if (box == -1){
-                // erro
+                fprintf(stdout, "Couldn't create a box.\n");
+                close(pipe);
+                exit(EXIT_FAILURE);
             }
             ssize_t w = tfs_write(box, msg, strlen(msg));
             if (w == -1){
-                // erro
+                fprintf(stdout, "Couldn't write in the box.\n");
+                close(pipe);
+                exit(EXIT_FAILURE);
             }
             tfs_close(box);
             pthread_cond_broadcast(&wait_messages_cond);
         }
         if (ret == 0){
-            // EOF
+            // EOF - never will get here
         }
     }
 
 }
 
+// this function reads the box and writes its initial content in the respective pipe
 void read_box(Session* session){
     int box = tfs_open(session->box_name, TFS_O_APPEND);
     if (box == -1){
-        //erro
+        fprintf(stdout, "Couldn't open the box.\n");
+        exit(EXIT_FAILURE);
     }
+    
+    // lets open the pipe for writing the content of the box in question
     int sub_pipe = open(session->pipe_name, O_WRONLY);
     if (sub_pipe == -1){
-        //erro
+        fprintf(stdout, "Session pipe doesn't exist.\n");
+        exit(EXIT_FAILURE);
     }
 
-    // will send to sub pipe the initial state of the content in 
+    // will send to sub pipe the initial state of the content in the box
     while (true) {
         char buffer[MESSAGE_SIZE];
         ssize_t ret = tfs_read(box, buffer, MESSAGE_SIZE - 1);
         while (ret == 0){
             pthread_cond_wait(&wait_messages_cond, &session->lock);
+            // if ret == 0, then we have to wait for a new message
             break;
         }
 
-        if (ret == 0){ // para continuar a prox iteracao do ciclo
+        if (ret == 0){ // to go to the next iteration of the cycle 
             continue;
         }
 
@@ -135,8 +146,11 @@ void read_box(Session* session){
             exit(EXIT_FAILURE);
         }
 
+        // sets the last thing to '\0'
         buffer[ret] = 0;
 
+        // then with this sequence of memcpys and memsets, we will fuse
+        // the op_code with the buffer in question, to send it to the pipe
         char buffer_with_op_code[sizeof(uint8_t) + MESSAGE_SIZE];
         uint8_t op_code = SEND_MESSAGE; 
         memcpy(buffer_with_op_code, &op_code, sizeof(uint8_t));
@@ -144,11 +158,12 @@ void read_box(Session* session){
         memcpy(buffer_with_op_code + 1, buffer, strlen(buffer) * sizeof(char));
 
         if (write(sub_pipe, buffer_with_op_code, strlen(buffer)) == -1){
-            // erro
+            fprintf(stdout, "Couldn't write in the box.\n");
             close(sub_pipe);
             exit(EXIT_FAILURE);
         }
 
+        // cleans the buffers
         memset(buffer, 0, strlen(buffer));
         memset(buffer_with_op_code, 0, strlen(buffer_with_op_code));
     }
@@ -256,7 +271,7 @@ void case_create_box(Session* session){
     char error_message[MESSAGE_SIZE];
     char client_name[MAX_CLIENT_NAME];
     char box_name[BOX_NAME];
-    uint8_t op_code = CREATE_BOX_ANSWER; //session->buffer = '\003|../manager1|box'
+    uint8_t op_code = CREATE_BOX_ANSWER; 
     memcpy(client_name, session->pipe_name, strlen(session->pipe_name)); 
     memcpy(box_name, session->buffer + 3 + strlen(client_name), BOX_NAME);
     client_pipe = open(client_name, O_WRONLY);
@@ -438,7 +453,6 @@ void case_list_box(Session* session){
 		    close(client_pipe);
 	    }
     }
-    // big goofy
     else {
         qsort(boxes, box_count, sizeof(Box), myCompare); //sort the boxes
         char response[sizeof(uint8_t) + sizeof(uint8_t) + BOX_NAME * sizeof(char) 
@@ -457,7 +471,8 @@ void case_list_box(Session* session){
 		        close(client_pipe);
 	        }
 
-            //memset(response, 0, strlen(response));
+            // cleans the buffer
+            memset(response, 0, strlen(response));
         }
     }
 }
@@ -584,6 +599,7 @@ int main(int argc, char **argv) {
             for (int i = 0; i < max_sessions; i++){
                 if(container[i].pipe_name == NULL){
                     current_session = &container[i];
+
                     memcpy(buffer, &op_code, sizeof(char));
                     
                     strcpy(buffer2, read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME + BOX_NAME));
@@ -594,7 +610,7 @@ int main(int argc, char **argv) {
                     
                     char string[strlen(buffer)];
                     memcpy(string, buffer, strlen(buffer));
-                    pcq_enqueue(queue, (void *) string); // "\003|../manager1|box"
+                    pcq_enqueue(queue, string); 
                     pthread_cond_signal(&queue->pcq_pusher_condvar);
                     break;
                 }

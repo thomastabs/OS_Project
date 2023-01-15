@@ -99,7 +99,7 @@ void *pcq_dequeue(pc_queue_t *queue) {
     // notify threads and unlock locks
     pthread_cond_signal(&queue->pcq_pusher_condvar);
     pthread_mutex_unlock(&queue->pcq_popper_condvar_lock);
-    pthread_mutex_unlock(&queue->pcq_tail_lock);
+    pthread_mutex_unlock(&queue->pcq_head_lock);
     pthread_mutex_unlock(&queue->pcq_current_size_lock);
     return result;
 }
