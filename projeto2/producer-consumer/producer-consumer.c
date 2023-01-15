@@ -13,7 +13,7 @@
 
 #define MAX_BUFFER (1300)
 
-int pcq_create(pc_queue_t *queue, size_t capacity){
+int pcq_create(pc_queue_t *queue, size_t capacity) {
     // allocates space, initialize variables
     queue->pcq_buffer = malloc(MAX_BUFFER);
     queue->pcq_capacity = capacity;
@@ -33,7 +33,7 @@ int pcq_create(pc_queue_t *queue, size_t capacity){
     return 0;
 }
 
-int pcq_destroy(pc_queue_t *queue){
+int pcq_destroy(pc_queue_t *queue) {
     // free space given
     free(queue->pcq_buffer);
 
@@ -42,7 +42,7 @@ int pcq_destroy(pc_queue_t *queue){
     pthread_mutex_destroy(&queue->pcq_head_lock);
     pthread_mutex_destroy(&queue->pcq_tail_lock);
     pthread_mutex_destroy(&queue->pcq_pusher_condvar_lock);
-    pthread_mutex_destroy(&queue->pcq_popper_condvar_lock );
+    pthread_mutex_destroy(&queue->pcq_popper_condvar_lock);
     pthread_cond_destroy(&queue->pcq_pusher_condvar);
     pthread_cond_destroy(&queue->pcq_popper_condvar);
 
@@ -57,7 +57,8 @@ int pcq_enqueue(pc_queue_t *queue, void *elem) {
 
     // Wait until the queue isn't full
     while (queue->pcq_current_size >= queue->pcq_capacity) {
-        pthread_cond_wait(&queue->pcq_pusher_condvar, &queue->pcq_pusher_condvar_lock);
+        pthread_cond_wait(&queue->pcq_pusher_condvar,
+                          &queue->pcq_pusher_condvar_lock);
     }
 
     // Put the element at the back of the queue
@@ -75,9 +76,8 @@ int pcq_enqueue(pc_queue_t *queue, void *elem) {
     pthread_mutex_unlock(&queue->pcq_tail_lock);
     pthread_mutex_unlock(&queue->pcq_current_size_lock);
 
-    return 0; 
+    return 0;
 }
-
 
 void *pcq_dequeue(pc_queue_t *queue) {
     void *result;
@@ -88,7 +88,8 @@ void *pcq_dequeue(pc_queue_t *queue) {
     pthread_mutex_lock(&queue->pcq_popper_condvar_lock);
     while (queue->pcq_current_size == 0) {
         // Wait until an element is inserted in the queue
-        pthread_cond_wait(&queue->pcq_pusher_condvar, &queue->pcq_popper_condvar_lock);
+        pthread_cond_wait(&queue->pcq_pusher_condvar,
+                          &queue->pcq_popper_condvar_lock);
     }
 
     // Retrieve the element at the front of the queue
