@@ -3,6 +3,7 @@ File System, project by:
 Fábio Sobrinho nº103473
 Tomá Taborda nº103641
 Grupo 52
+(Ler README)
 */
 
 #include "../fs/operations.h"
