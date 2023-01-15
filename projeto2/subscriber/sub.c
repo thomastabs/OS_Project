@@ -26,6 +26,7 @@ int send_sub_request(int server_pipe, char* client_pipe, char* box){
     char server_request[sizeof(uint8_t) + 2 + MAX_CLIENT_NAME * sizeof(char) + BOX_NAME * sizeof(char)];
     uint8_t op_code = SUB_REQUEST; 
     memcpy(server_request, &op_code, sizeof(uint8_t));
+    // this is very similar to the pub request, the only thing that changes is the op_code
 
     memset(server_request + 1, '|', sizeof(char));
     memset(server_request + 2, '\0', MAX_CLIENT_NAME * sizeof(char));

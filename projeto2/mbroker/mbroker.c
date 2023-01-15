@@ -257,8 +257,8 @@ void case_create_box(Session* session){
     char error_message[MESSAGE_SIZE];
     char client_name[MAX_CLIENT_NAME];
     char box_name[BOX_NAME];
-    uint8_t op_code = CREATE_BOX_ANSWER;
-    memcpy(client_name, session->buffer + 2, MAX_CLIENT_NAME);
+    uint8_t op_code = CREATE_BOX_ANSWER; //session->buffer = '\003|../manager1|box'
+    memcpy(client_name, session->pipe_name, strlen(session->pipe_name)); 
     memcpy(box_name, session->buffer + 3 + strlen(client_name), BOX_NAME);
     client_pipe = open(client_name, O_WRONLY);
     for (int i=0; i < box_count; i++){
@@ -468,9 +468,8 @@ void *thread_function(void *session){
     uint8_t op_code;
 
     while(true){
-        while (actual_session->is_free) {
-            pthread_cond_wait(&actual_session->flag, &actual_session->lock);
-        }
+        pthread_cond_wait(&actual_session->flag, &actual_session->lock);
+        
         char* request = (char *) pcq_dequeue(queue);
         memcpy(&actual_session->buffer, request, MAX_REQUEST_SIZE);
         actual_session->is_free = false;
@@ -593,6 +592,7 @@ int main(int argc, char **argv) {
             for (int i = 0; i < max_sessions; i++){
                 if(container[i].pipe_name == NULL){
                     current_session = &container[i];
+                    pthread_mutex_lock(&current_session->lock);
                     memcpy(buffer, &op_code, sizeof(char));
                     
                     strcpy(buffer2, read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME + BOX_NAME));
@@ -600,20 +600,12 @@ int main(int argc, char **argv) {
 
                     current_session->pipe_name = client_name;
                     current_session->is_free = false;
-                    //aqui sabese la pq so entra uma string com o opcode colado
-                    //ao client path name, era por isso q nao entrava
-                    //ex: "\003../manager"
-                    //por isso fiz aquilo aqui em cima para separar as coisas e juntar
-                    // as que queria, ta um pouco as marteladas sim, se quiseres tentar descobrir
-                    // uma maneira de remover a variavel buffer sem partir isso estas a vontade
-                    // massss aconselhava te a mudar os memcpys restantes das outras funcoes e
-                    // continuar o debugging!!!! guia te pela sequencia de memcpys q fiz no manager
-                    // , na funcao do registo, esse sera o formato a partir de agr
                     
                     char string[strlen(buffer)];
                     memcpy(string, buffer, strlen(buffer));
-                    pcq_enqueue(queue, (void*) string); // "\003|../manager1|box"
+                    pcq_enqueue(queue, string); // "\003|../manager1|box"
                     pthread_cond_signal(&current_session->flag);
+                    pthread_mutex_unlock(&current_session->lock);
                     break;
                 }
             }

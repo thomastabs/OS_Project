@@ -76,22 +76,19 @@ int pcq_enqueue(pc_queue_t *queue, void *elem) {
 
 
 void *pcq_dequeue(pc_queue_t *queue) {
-    pthread_mutex_lock(&queue->pcq_current_size_lock);
-    pthread_mutex_lock(&queue->pcq_popper_condvar_lock);
+    void *result;
+    pthread_mutex_lock(&queue->pcq_tail_lock);
     while (queue->pcq_current_size == 0) {
         // queue is empty, wait for an element
         pthread_cond_wait(&queue->pcq_popper_condvar, &queue->pcq_popper_condvar_lock);
     }
 
-    pthread_mutex_lock(&queue->pcq_head_lock);
-    void *elem = queue->pcq_buffer[queue->pcq_head];
+    result = queue->pcq_buffer[queue->pcq_head];
     queue->pcq_head = (queue->pcq_head + 1) % queue->pcq_capacity;
-    pthread_mutex_unlock(&queue->pcq_head_lock);
-
     queue->pcq_current_size--;
 
     pthread_cond_signal(&queue->pcq_pusher_condvar);
-    pthread_mutex_unlock(&queue->pcq_popper_condvar_lock);
-    pthread_mutex_unlock(&queue->pcq_current_size_lock);
-    return elem;
+    
+    pthread_mutex_unlock(&queue->pcq_tail_lock);
+    return result;
 }
