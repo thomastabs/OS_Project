@@ -351,6 +351,7 @@ void case_remove_box(Session* session){
     char client_name[MAX_CLIENT_NAME];
     char box_name[BOX_NAME];
     uint8_t op_code = REMOVE_BOX_ANSWER;
+    // treat request and opens client pipe
     memcpy(client_name, session->buffer + 2, MAX_CLIENT_NAME);
     memcpy(box_name, session->buffer + 3 + strlen(client_name), BOX_NAME);
     client_pipe = open(client_name, O_WRONLY);
@@ -364,6 +365,7 @@ void case_remove_box(Session* session){
         break;
     }
 
+    // if there are no boxes, send message back to client and write in the pipe
     if (ret == -1){
         strcpy(error_message, "There isn't a box with the specified box name.\n");
 
@@ -379,13 +381,16 @@ void case_remove_box(Session* session){
         return;
     }
 
+    // removes the box by unlinking from the TFS
     int box = tfs_unlink(box_name);
     if (box == -1){
         ret = -1;
         strcpy(error_message, "Couldnt delete the specified box.\n");
     }
     else {
+
         for (int i=0; i < max_sessions; i++){
+            // closes and unlinks the pipes that were related to that box
             if(strcmp(container[i].box_name, box_name) == 0){
                 close(container[i].pipe);
                 unlink(container[i].pipe_name);
@@ -396,6 +401,7 @@ void case_remove_box(Session* session){
             }
         }
         for (int i=0; i < BOX_NAME; i++){
+            // clears the box from the list
             if(strcmp(boxes[i].box_name, box_name)){
                 strcpy(boxes[i].box_name, box_name);
                 boxes[i].box_size = 0;
@@ -412,6 +418,7 @@ void case_remove_box(Session* session){
     }
 
     if (ret == -1){
+        // if anyting wasn't according to plan, creates error message and writes to client pipe
         char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
         memcpy(response, &op_code, sizeof(uint8_t));
         memcpy(response + 1, &ret, sizeof(int32_t));
@@ -423,11 +430,12 @@ void case_remove_box(Session* session){
         }
     }
     else {   
+        // creates error message and writes to client pipe
         char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
         memcpy(response, &op_code, sizeof(uint8_t));
         memcpy(response + 1, &ret, sizeof(int32_t));
         memcpy(response + 2, "\0", sizeof(char));
-        // preencer o campo do error message com \0
+        // fills error message with /0
 
         if (write(client_pipe, response, strlen(response)) > 0){
             close(client_pipe);
@@ -439,10 +447,11 @@ void case_list_box(Session* session){
     int client_pipe;
     char client_name[MAX_CLIENT_NAME];
     uint8_t op_code = LIST_BOXES_ANSWER;
+    // treat request and opens client pipe
     memcpy(client_name, session->buffer + 2, MAX_CLIENT_NAME);
     client_pipe = open(client_name, O_WRONLY);
 
-    if(box_count == 0){
+    if(box_count == 0){ // if there are no boxes in the system, create answer and writes to pipe
         uint8_t i = 1;
         char response[sizeof(uint8_t) + sizeof(uint8_t) + BOX_NAME * sizeof(char)];
         memcpy(response, &op_code, sizeof(uint8_t));
@@ -453,11 +462,12 @@ void case_list_box(Session* session){
 		    close(client_pipe);
 	    }
     }
-    else {
+    else { // if there are, sort the boxes
         qsort(boxes, box_count, sizeof(Box), myCompare); //sort the boxes
         char response[sizeof(uint8_t) + sizeof(uint8_t) + BOX_NAME * sizeof(char) 
                 + sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint64_t)];
         
+        // for every existing box in the list, adds to the request
         for(int i=0; i < box_count; i++){
             memcpy(response, &op_code, sizeof(uint8_t));
             memcpy(response + 1, &boxes[i].last, 1 * sizeof(uint8_t));
@@ -466,13 +476,12 @@ void case_list_box(Session* session){
             memcpy(response + 2 + strlen(boxes[i].box_name), &boxes[i].box_size, sizeof(uint64_t));
             memcpy(response + 2 + strlen(boxes[i].box_name) + sizeof(uint64_t), &boxes[i].num_publishers, sizeof(uint64_t));
             memcpy(response + 2 + strlen(boxes[i].box_name) + sizeof(uint64_t) + sizeof(uint64_t), &boxes[i].num_subscribers, sizeof(uint64_t));
-
-            if (write(client_pipe, &response, sizeof(response)) > 0) {
-		        close(client_pipe);
-	        }
-
             // cleans the buffer
             memset(response, 0, strlen(response));
+        }
+        // finally, write to pipe
+        if (write(client_pipe, &response, sizeof(response)) > 0) {
+            close(client_pipe);
         }
     }
 }
@@ -482,11 +491,13 @@ void *thread_function(void *session){
     uint8_t op_code;
 
     while(true){
+        // removes request associated to this thread and adda to the session buffer
         char* request = (char *) pcq_dequeue(queue);
         memcpy(&actual_session->buffer, request, MAX_REQUEST_SIZE);
         actual_session->is_free = false;
         memcpy(&op_code, &actual_session->buffer, sizeof(uint8_t));
 
+        //use the op_code to check what operation do we need to do
         switch (op_code) {
             case PUB_REQUEST:
                 case_pub_request(actual_session);
@@ -505,13 +516,15 @@ void *thread_function(void *session){
                 break;
             default:
                 break;
-        } 
+        }
+        // gets avaliable for new requests 
         actual_session->is_free = true;
     }
 }
 
 
 int init_threads() {
+    // for every session, iniciate mutex and create thread
     for (uint32_t i=0; i < max_sessions; i++){
         container[i].is_free = true;
        	if (pthread_mutex_init(&container[i].lock, NULL) == -1) {
@@ -527,16 +540,19 @@ int init_threads() {
 }
 
 
-int main(int argc, char **argv) {    
+int main(int argc, char **argv) {  
+    // Check if we have enough arguments to start mbroker
     if(argc < 2){
         fprintf(stderr, "usage: mbroker <pipename> <max_sessions>\n");
     }
 
+    // get information from argv
     char *pipe_name = argv[1];
     max_sessions = (uint32_t) atoi(argv[2]);
     container =(Session *) malloc(max_sessions * sizeof(Session));
     queue = malloc(sizeof(pc_queue_t));
 
+    // begins TFS and creates the queue
     if (tfs_init(NULL) == -1){
         fprintf(stderr, "Não foi possivel começar o servidor\n");
         return -1;
@@ -569,6 +585,7 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
+    // start "max_sessions" threads
     init_threads();
 
     while(true){
@@ -578,19 +595,28 @@ int main(int argc, char **argv) {
         uint8_t op_code;
         uint8_t exception = LIST_BOXES_REQUEST;
         Session *current_session;
+
+        // read request
         if (read(server_pipe, &op_code, sizeof(uint8_t)) == -1) {
             return -1;
         }
+        /*
+        Every request is the same except for listing the boxes, so there is different ways of treating these cases
+        */
         if (op_code == exception){
             for(int i = 0; i < max_sessions; i++){
                 if(container[i].pipe_name == NULL){
+                    // get the thread we are going to access, put the information read into a buffer
+                    // associate the pipe_name into the thread and adds request into queue
                     current_session = &container[i];
                     memcpy(buffer, &op_code, sizeof(char));
                     memset(client_name, '\0', MAX_CLIENT_NAME);
-                    strcpy(client_name, (read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME + BOX_NAME)) + 1);
+                    read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME);
+                    memcpy(client_name, buffer + 1, MAX_CLIENT_NAME);
                     current_session->pipe_name = client_name;
                    
                     pcq_enqueue(queue, buffer);
+                    pthread_cond_signal(&queue->pcq_pusher_condvar);
                     break;
                 }
             }
@@ -598,6 +624,8 @@ int main(int argc, char **argv) {
         else{
             for (int i = 0; i < max_sessions; i++){
                 if(container[i].pipe_name == NULL){
+                    // get the thread we are going to access, put the information read into a buffer
+                    // associate the pipe_name into the thread and adds request into queue
                     current_session = &container[i];
 
                     memcpy(buffer, &op_code, sizeof(char));
@@ -618,6 +646,7 @@ int main(int argc, char **argv) {
         }
 
 
+        // if signal is called, end the queue, freeing the information and unlink the pipes
         if (signal(SIGINT, mbroker_exit) == SIG_ERR){
             pcq_destroy(queue);
             free(queue);
@@ -629,6 +658,7 @@ int main(int argc, char **argv) {
         }
 
     }
+    // never reaches this case
     close(server_pipe);
     unlink(pipe_name);
     return -1;
