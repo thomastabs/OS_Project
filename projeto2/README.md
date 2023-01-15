@@ -1,5 +1,11 @@
-# projeto-so-2022-23
+Grupo 52:
+	Fábio Sobrinho - 103473
+	Tomás Taborda - 103641
 
-Código fornecido para o segundo exercício do projeto de Sistemas Operativos do ano letivo 2022-2023.
+Este README destina-se a explicar o que faltou fazer neste segundo projeto.
+Como um grupo, acreditamos que temos a lógica e o conceito geral do projeto bem realizada e implementada porém existe alguns erros que nos impediram de testar o nosso projeto mais a fundo.
+Acreditamos que o problema principal encontra-se na producer-consumer queue e que está a fazer conflitos com a nossa implementação multi-threading não acordando as threads desejadas.
 
-Consultar o [enunciado do projeto](https://github.com/tecnico-so/enunciado-proj-so-2022-23). 
+Após muito tempo, não conseguimos chegar a uma solução a tempo, e assim apesar do nosso esforço decidimos deixar como estava inicialmente.
+Com isto, desde já pedimos desculpas e obrigado.
+
