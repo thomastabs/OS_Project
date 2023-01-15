@@ -12,10 +12,7 @@
 #include "../utils/logging.h"
 #include "../utils/common.h"
 #include "../fs/operations.h"
-
-#define MAX_PIPE_NAME 256
-#define MAX_BOX_NAME 32
-#define MAX_MSG_SIZE 1024   
+ 
 
 // Helper function to send pub request
 int send_pub_request(int server_pipe, char* client_name, char* box) {
@@ -76,12 +73,12 @@ int send_pub_request(int server_pipe, char* client_name, char* box) {
 }
 
 int send_pub_msg(int session_pipe, char *msg){
-    char pub_msg[sizeof(uint8_t) +  MAX_MSG_SIZE * sizeof(char)];
+    char pub_msg[sizeof(uint8_t) +  MESSAGE_SIZE * sizeof(char)];
     uint8_t op_code = SEND_MESSAGE;
     // lets create the format for the pub message
     // in which consists in the op_code and then the message itself
     memcpy(pub_msg, &op_code, sizeof(uint8_t));
-    memset(pub_msg + 1, '\0', MAX_MSG_SIZE * sizeof(char));
+    memset(pub_msg + 1, '\0', MESSAGE_SIZE * sizeof(char));
     memcpy(pub_msg + 1, msg, strlen(msg) * sizeof(char));
 
     // write to the the client session pipe
@@ -97,13 +94,13 @@ int main(int argc, char **argv) {
     char *box_name = argv[3];
 
     // checks if the number of arguments is correct
-    if (argc != 4){
+    if (argc < 4){
         fprintf(stderr, "usage: pub <register_pipe_name> <box_name>\n");
         exit(EXIT_FAILURE);
     }
 
     // before doing anything, it checks the sizes of the pub pipe name and the box
-    if (strlen(box_name) > MAX_BOX_NAME || strlen(pub_pipename) > MAX_PIPE_NAME){
+    if (strlen(box_name) > BOX_NAME || strlen(pub_pipename) > MAX_CLIENT_NAME){
         fprintf(stderr, "Max variable size achieved.\n");
         exit(EXIT_FAILURE);
     }
@@ -139,13 +136,13 @@ int main(int argc, char **argv) {
 
         // so lets start reading from stdin by 
         // creating a buffer and then clean it
-        char input[MAX_MSG_SIZE];
-	    memset(input, 0, MAX_MSG_SIZE);
+        char input[MESSAGE_SIZE];
+	    memset(input, 0, MESSAGE_SIZE);
 
-        while (fgets(input, MAX_MSG_SIZE, stdin)) {
+        while (fgets(input, MESSAGE_SIZE, stdin)) {
             /* if line too long, truncate and swallow the rest of the line */
-            if (strlen(input) >= MAX_MSG_SIZE - 1) {
-                input[MAX_MSG_SIZE - 1] = '\0';
+            if (strlen(input) >= MESSAGE_SIZE - 1) {
+                input[MESSAGE_SIZE - 1] = '\0';
                 while (getchar() != '\n' && !feof(stdin))
                     ;
             }
@@ -171,7 +168,7 @@ int main(int argc, char **argv) {
                 break;
             }
         }
-        
+
         fprintf(stderr, "[INFO]: closing session pipe\n");
         close(session_pipe); 
         unlink(pub_pipename);
