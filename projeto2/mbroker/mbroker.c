@@ -53,18 +53,25 @@ static int myCompare(const void* a, const void* b){
  * Reads (and guarantees that it reads correctly) a given number of bytes
  * from a pipe to a given buffer
  */
-int read_buffer(int rx, char *buf, size_t to_read) {
+char* read_buffer(int rx, char *buf, size_t to_read) {
     ssize_t ret;
     size_t read_so_far = 0;
     while (read_so_far < to_read) {
         ret = read(rx, buf + read_so_far, to_read - read_so_far);
         if (ret == -1) {
             fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-            return -1;
+            exit(EXIT_FAILURE);
         }
         read_so_far += (size_t) ret;
+        /**
+        if (read_so_far >= strlen(buf)){
+            return 0;
+        }
+        **/
     }
-    return 0;
+    // now we will separate the client path from the box
+    strtok(buf + 1, "|");
+    return (buf + 1);
 }
 
 void send_message_to_box(Session *session){
@@ -560,7 +567,8 @@ int main(int argc, char **argv) {
 
     while(true){
         char buffer[MAX_REQUEST_SIZE];
-        char content3[MAX_CLIENT_NAME];
+        char buffer2[MAX_REQUEST_SIZE];
+        char client_name[MAX_CLIENT_NAME];
         uint8_t op_code;
         uint8_t exception = LIST_BOXES_REQUEST;
         Session *current_session;
@@ -572,9 +580,9 @@ int main(int argc, char **argv) {
                 if(container[i].pipe_name == NULL){
                     current_session = &container[i];
                     memcpy(buffer, &op_code, sizeof(char));
-                    read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME);
-                    memcpy(content3, buffer + 1, MAX_CLIENT_NAME);
-                    current_session->pipe_name = content3;
+                    memset(client_name, '\0', MAX_CLIENT_NAME);
+                    strcpy(client_name, (read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME + BOX_NAME)) + 1);
+                    current_session->pipe_name = client_name;
                    
                     pcq_enqueue(queue, buffer);
                     pthread_cond_signal(&current_session->flag);
@@ -587,11 +595,18 @@ int main(int argc, char **argv) {
                 if(container[i].pipe_name == NULL){
                     current_session = &container[i];
                     memcpy(buffer, &op_code, sizeof(char));
-                    read_buffer(server_pipe, buffer  + 1, MAX_CLIENT_NAME + BOX_NAME);
-                    memcpy(content3, buffer + 1, MAX_CLIENT_NAME);
-                    current_session->pipe_name = content3;
+                    memset(client_name, '\0', MAX_CLIENT_NAME);
+                    
+                    strcpy(client_name, read_buffer(server_pipe, buffer + 1, MAX_CLIENT_NAME + BOX_NAME));
+                    current_session->pipe_name = client_name;
                     current_session->is_free = false;
-                    pcq_enqueue(queue, buffer);
+
+                    memset(buffer2, '\0', strlen(buffer2));
+                    memcpy(buffer2, &op_code, sizeof(uint8_t));
+                    memset(buffer2 + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
+                    memcpy(buffer2 + 1, client_name, strlen(client_name) * sizeof(char));
+
+                    pcq_enqueue(queue, buffer2);
                     pthread_cond_signal(&current_session->flag);
                     break;
                 }
@@ -614,7 +629,6 @@ int main(int argc, char **argv) {
     unlink(pipe_name);
     return -1;
 }
-
 
 
 
