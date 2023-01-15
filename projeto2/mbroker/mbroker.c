@@ -600,14 +600,6 @@ int main(int argc, char **argv) {
 
                     current_session->pipe_name = client_name;
                     current_session->is_free = false;
-
-                    /**
-                    memset(buffer2, '\0', strlen(buffer2));
-                    memcpy(buffer2, &op_code, sizeof(uint8_t));
-                    memset(buffer2 + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
-                    memcpy(buffer2 + 1, client_name, strlen(client_name) * sizeof(char));
-                    **/
-                    
                     //aqui sabese la pq so entra uma string com o opcode colado
                     //ao client path name, era por isso q nao entrava
                     //ex: "\003../manager"
@@ -617,7 +609,10 @@ int main(int argc, char **argv) {
                     // massss aconselhava te a mudar os memcpys restantes das outras funcoes e
                     // continuar o debugging!!!! guia te pela sequencia de memcpys q fiz no manager
                     // , na funcao do registo, esse sera o formato a partir de agr
-                    pcq_enqueue(queue, buffer); // "\003|../manager1|box"
+                    
+                    char string[strlen(buffer)];
+                    memcpy(string, buffer, strlen(buffer));
+                    pcq_enqueue(queue, (void*) string); // "\003|../manager1|box"
                     pthread_cond_signal(&current_session->flag);
                     break;
                 }
