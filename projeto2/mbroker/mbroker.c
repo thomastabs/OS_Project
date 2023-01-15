@@ -170,21 +170,24 @@ void read_box(Session* session){
 }
 
 void case_pub_request(Session* session){
-    int ret;
-    char client_name[MAX_CLIENT_NAME];
-    char box[BOX_NAME];
+    int ret;                                // ret -> this simbolizes the return value that 
+    char client_name[MAX_CLIENT_NAME];      // is written in the pipe to check
+    char box[BOX_NAME];                     // if it was denied or not 
     int pipe;
+    // saves the thing in its respective new arrays
     memcpy(client_name, session->buffer + 2, MAX_CLIENT_NAME);
     memcpy(box, session->buffer + 3 + strlen(client_name), BOX_NAME);
     pipe = open(client_name, O_WRONLY);
 
     for(uint32_t i=0; i< max_sessions; i++){
+        // then we check if there is any pub already with this box name
         if(container[i].type == PUB && (strcmp(box, container[i].box_name) == 0)){
             ret = -1;
             if(write(pipe, &ret, sizeof(int)) > 0){
                 return;
             };
         }
+        // then we check if there is any pub already with this pipe name
         if(container[i].type == PUB && (strcmp(client_name, container[i].pipe_name) == 0)){
             ret = -1;
             if (write(pipe, &ret, sizeof(int)) > 0){
@@ -192,6 +195,9 @@ void case_pub_request(Session* session){
             };
         }
     }
+    // after verifying that everything is ok, then we will process to 
+    // save the respective values in the respective containers
+    // and then we write the ret value if the operation was sucessfull
     for (int i=0; i < BOX_NAME; i++){
         if (strcmp(box, boxes[i].box_name) == 0){
             session->type = PUB;
@@ -218,15 +224,23 @@ void case_pub_request(Session* session){
 
 
 void case_sub_request(Session* session){
-    int ret;
-    char client_name[MAX_CLIENT_NAME];
-    char box[BOX_NAME];
+    int ret;                                // ret -> this simbolizes the return value that 
+    char client_name[MAX_CLIENT_NAME];      // is written in the pipe to check
+    char box[BOX_NAME];                     // if it was denied or not 
     int pipe;
+
+    // saves the thing in its respective new arrays
     memcpy(client_name, session->buffer + 2, MAX_CLIENT_NAME);
     memcpy(box, session->buffer + 3 + strlen(client_name), BOX_NAME);
+
+    // then we open the pipe for writing 
     pipe = open(client_name, O_WRONLY);
+
+    // with this if we verify if the session type is NULL, if so we continue 
     if (session->type != PUB && session->type != SUB){
         for(uint32_t i=0; i< max_sessions; i++){
+
+            // lets check if there is any sub with this pipe name
             if(container[i].type == SUB && (strcmp(client_name, container[i].pipe_name) == 0)){
                 ret = -1;
                 if(write(pipe, &ret, sizeof(int)) > 0){
@@ -234,6 +248,8 @@ void case_sub_request(Session* session){
                 };
             }
         }
+        // if everything is alright until now, then we will save the
+        // respective values in the respective containers
         for (int i=0; i < BOX_NAME; i++){
             if (strcmp(box, boxes[i].box_name) == 0){
                 session->type = SUB;
@@ -248,12 +264,8 @@ void case_sub_request(Session* session){
                     close(pipe);
                     return;
                 };
-            ret = -1;
-            if (write(pipe, &ret, sizeof(int)) > 0){
-                return;
-            };
+            }
         }
-    }
         ret = -1;
         if (write(pipe, &ret, sizeof(int)) > 0){
             return;
@@ -272,11 +284,16 @@ void case_create_box(Session* session){
     char client_name[MAX_CLIENT_NAME];
     char box_name[BOX_NAME];
     uint8_t op_code = CREATE_BOX_ANSWER; 
-    memcpy(client_name, session->pipe_name, strlen(session->pipe_name)); 
+
+    // lets take the values out of the buffer, and store them in these arrays for later
+    memcpy(client_name, session->buffer + 2, MAX_CLIENT_NAME); 
     memcpy(box_name, session->buffer + 3 + strlen(client_name), BOX_NAME);
+
+    // then we open the pipe for writing 
     client_pipe = open(client_name, O_WRONLY);
     for (int i=0; i < box_count; i++){
         // lets check if there is any box with the same name 
+        // if yes then an answer will be created and sent to the client pipe
         if (strcmp(box_name, boxes[i].box_name) == 0){
             ret = -1; 
             strcpy(error_message, "There is already a box with this name.\n");
@@ -294,6 +311,8 @@ void case_create_box(Session* session){
             return;
         }
     }
+    // then if everything is alright until now, we create the box 
+    // and proceed to save its values in the box container of the system 
     int box = tfs_open(box_name, TFS_O_CREAT);
     if (box == -1){
         ret = -1;
@@ -301,6 +320,7 @@ void case_create_box(Session* session){
     }
     else {
         for (int i=0; i < BOX_NAME; i++){
+            // if there is any box free, then it will continue
             if(boxes[i].is_free){
                 boxes[i].box_name = box_name;
                 boxes[i].box_size = 1024;
@@ -314,10 +334,15 @@ void case_create_box(Session* session){
                 ret = 0;
                 break;
             }
+            ret = -1;
+            strcpy(error_message, "There is no space left in box container.\n");
+            continue;
         }
     }
 
     if (ret == -1){
+        // if ret is -1, then a message will be created with the 
+        // value of the error_message that has been given so far 
         char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
         memcpy(response, &op_code, sizeof(uint8_t));
         memcpy(response + 1, &ret, sizeof(int32_t));
@@ -330,13 +355,14 @@ void case_create_box(Session* session){
         close(client_pipe);
     }
     else {   
+        // if everything went well, then instead of the error_message we put '\0'
         char response[sizeof(uint8_t) + sizeof(int32_t) + MESSAGE_SIZE * sizeof(char)];
         memcpy(response, &op_code, sizeof(uint8_t));
         memcpy(response + 1, &ret, sizeof(int32_t));
         memset(response + 2, '\0', MESSAGE_SIZE * sizeof(char));
         memcpy(response + 2, "\0", strlen(error_message) * sizeof(char));
-        // preencer o campo do error message com \0
 
+        // then we write it to the client pipe 
         if (write(client_pipe, response, strlen(response)) > 0){
             close(client_pipe);
         }
