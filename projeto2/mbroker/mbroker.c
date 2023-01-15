@@ -605,8 +605,17 @@ int main(int argc, char **argv) {
                     memcpy(buffer2, &op_code, sizeof(uint8_t));
                     memset(buffer2 + 1, '\0', MAX_CLIENT_NAME * sizeof(char));
                     memcpy(buffer2 + 1, client_name, strlen(client_name) * sizeof(char));
-
-                    pcq_enqueue(queue, buffer2);
+                    
+                    //aqui sabese la pq so entra uma string com o opcode colado
+                    //ao client path name, era por isso q nao entrava
+                    //ex: "\003../manager"
+                    //por isso fiz aquilo aqui em cima para separar as coisas e juntar
+                    // as que queria, ta um pouco as marteladas sim, se quiseres tentar descobrir
+                    // uma maneira de remover a variavel buffer sem partir isso estas a vontade
+                    // massss aconselhava te a mudar os memcpys restantes das outras funcoes e
+                    // continuar o debugging!!!! guia te pela sequencia de memcpys q fiz no manager
+                    // , na funcao do registo, esse sera o formato a partir de agr
+                    pcq_enqueue(queue, buffer2); 
                     pthread_cond_signal(&current_session->flag);
                     break;
                 }
